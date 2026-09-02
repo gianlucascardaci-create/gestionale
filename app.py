@@ -1742,9 +1742,25 @@ def salva_dati_esterni():
         supabase.table("utenti_autorizzati").update(u_data).eq("username", usr_k).execute()
       else:
         supabase.table("utenti_autorizzati").insert(u_data).execute()
-supabase.storage.from_("immagini_prodotti").upload(
-    path="percorso/nome_file.jpg", file=file_obj, file_options={"upsert": "true"}
+# Pulsante per caricare l'immagine del singolo prodotto
+file_caricato = st.file_uploader(
+    "Carica foto", type=["jpg", "png", "jpeg"], key="upload_prodotto_nuovo"
 )
+
+# Se l'utente ha selezionato un file dal PC
+if file_caricato is not None:
+  # Definiamo il percorso con cui salvarla nello storage
+  percorso_storage = f"prodotti/{file_caricato.name}"
+
+  # Invio del file a Supabase Storage
+  supabase.storage.from_("NOME_DEL_TUO_BUCKET").upload(
+      path=percorso_storage,
+      file=file_caricato.getvalue(),
+      file_options={"upsert": "true"},
+  )
+
+  # Salviamo il percorso nel dizionario del prodotto
+  p_to_save["immagine"] = percorso_storage
 def salva_dati_esterni():
   # Inserisci qui l'elenco esatto delle colonne presenti nella tua tabella Supabase
   colonne_tabella = {
