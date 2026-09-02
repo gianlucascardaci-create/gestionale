@@ -1742,7 +1742,7 @@ def salva_dati_esterni():
         supabase.table("utenti_autorizzati").update(u_data).eq("username", usr_k).execute()
       else:
         supabase.table("utenti_autorizzati").insert(u_data).execute()
-supabase.storage.from_("tuo_bucket").upload(
+supabase.storage.from_("immagini_prodotti").upload(
     path="percorso/nome_file.jpg", file=file_obj, file_options={"upsert": "true"}
 )
 def salva_dati_esterni():
