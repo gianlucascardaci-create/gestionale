@@ -1753,7 +1753,7 @@ if file_caricato is not None:
   percorso_storage = f"prodotti/{file_caricato.name}"
 
   # Invio del file a Supabase Storage
-  supabase.storage.from_("NOME_DEL_TUO_BUCKET").upload(
+  supabase.storage.from_("immagini_prodotti").upload(
       path=percorso_storage,
       file=file_caricato.getvalue(),
       file_options={"upsert": "true"},
