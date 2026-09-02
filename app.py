@@ -1705,3 +1705,40 @@ else:
                   if str_lit.button("🧹 Svuota Lista", use_container_width=True):
                     str_lit.session_state.lista_attrezzature_corrente = []
                     str_lit.rerun()
+
+def salva_dati_esterni():
+    # Senza try...except per vedere l'errore reale restituito da Supabase
+    for p in str_lit.session_state.prodotti_noleggio:
+      p_to_save = {k: v for k, v in p.items() if k != "id"}
+      codice_p = p.get("codice")
+      if codice_p:
+        existing = supabase.table("prodotti_noleggio").select("id").eq("codice", codice_p).execute()
+        if existing.data:
+          supabase.table("prodotti_noleggio").update(p_to_save).eq("codice", codice_p).execute()
+        else:
+          supabase.table("prodotti_noleggio").insert(p_to_save).execute()
+
+    for ev in str_lit.session_state.eventi_catering:
+      ev_to_save = {k: v for k, v in ev.items() if k != "id"}
+      nome_ev = ev.get("nome_evento")
+      data_ev = ev.get("data")
+      if nome_ev:
+        existing_ev = supabase.table("eventi_catering").select("id").eq("nome_evento", nome_ev).eq("data", data_ev).execute()
+        if existing_ev.data:
+          supabase.table("eventi_catering").update(ev_to_save).eq("nome_evento", nome_ev).eq("data", data_ev).execute()
+        else:
+          supabase.table("eventi_catering").insert(ev_to_save).execute()
+
+    for usr_k, usr_v in str_lit.session_state.utenti_autorizzati.items():
+      u_data = {
+          "username": usr_k,
+          "password": usr_v.get("password"),
+          "ruolo": usr_v.get("ruolo"),
+          "nome": usr_v.get("nome"),
+          "email": usr_v.get("email"),
+      }
+      existing_u = supabase.table("utenti_autorizzati").select("id").eq("username", usr_k).execute()
+      if existing_u.data:
+        supabase.table("utenti_autorizzati").update(u_data).eq("username", usr_k).execute()
+      else:
+        supabase.table("utenti_autorizzati").insert(u_data).execute()
