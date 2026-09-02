@@ -24,18 +24,18 @@ str_lit.set_page_config(
 )
 
 # ==============================================================================
-# CONFIGURAZIONE SUPABASE (Legge in automatico dai Secrets di Streamlit Cloud)
+# CONFIGURAZIONE SUPABASE
 # ==============================================================================
-SUPABASE_URL = str_lit.secrets.get("SUPABASE_URL", "IL_TUO_SUPABASE_URL")
-SUPABASE_KEY = str_lit.secrets.get("SUPABASE_KEY", "IL_TUO_SUPABASE_ANON_KEY")
+SUPABASE_URL = str_lit.secrets.get("SUPABASE_URL", "https://sqmualbhrkjgofoiqkfi.supabase.co")
+SUPABASE_KEY = str_lit.secrets.get("SUPABASE_KEY", "sb_publishable_PLcXb-rZPQjTdNmggOYxLg_PWLyUGxc")
 BUCKET_IMMAGINI = "immagini_prodotti"
 
 @str_lit.cache_resource
 def init_supabase() -> Client:
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
-if SUPABASE_URL == "IL_TUO_SUPABASE_URL" or SUPABASE_KEY == "IL_TUO_SUPABASE_ANON_KEY":
-    str_lit.error("⚠️ Configura SUPABASE_URL e SUPABASE_KEY nei Secrets di Streamlit Cloud o nel codice.")
+if not SUPABASE_URL or not SUPABASE_KEY or SUPABASE_URL == "IL_TUO_SUPABASE_URL":
+    str_lit.error("⚠️ Sostituisci SUPABASE_URL e SUPABASE_KEY con le tue credenziali reali prima di continuare.")
     str_lit.stop()
 
 supabase = init_supabase()
@@ -43,6 +43,7 @@ supabase = init_supabase()
 str_lit.markdown(
     """
 <style>
+    /* 1. Stile Base per Scrollbar Globali e Contenitori - Sempre visibili */
     html, body, [data-testid="stAppViewContainer"], [data-testid="stMain"],
     div[data-testid="stVerticalBlockBorderWrapper"],
     div[aria-label="Scrollable container"],
@@ -52,6 +53,7 @@ str_lit.markdown(
         overflow-y: scroll !important;
     }
 
+    /* 2. Regole WebKit per browser Chrome, Edge, Safari (Forzatura visibilità permanente) */
     ::-webkit-scrollbar {
         width: 12px !important;
         height: 12px !important;
@@ -78,6 +80,7 @@ str_lit.markdown(
         background-color: #004494 !important;
     }
 
+    /* Stile pulsanti principali */
     button[kind="primary"], 
     div.stButton > button[kind="primary"], 
     [data-testid="baseButton-primary"],
