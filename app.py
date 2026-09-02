@@ -34,8 +34,8 @@ BUCKET_IMMAGINI = "immagini_prodotti"
 def init_supabase() -> Client:
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
-if not SUPABASE_URL or not SUPABASE_KEY or SUPABASE_URL == "IL_TUO_SUPABASE_URL":
-    str_lit.error("⚠️ Sostituisci SUPABASE_URL e SUPABASE_KEY con le tue credenziali reali prima di continuare.")
+if not SUPABASE_URL or not SUPABASE_KEY:
+    str_lit.error("⚠️ Sostituisci SUPABASE_URL e SUPABASE_KEY con le tue credenziali reali.")
     str_lit.stop()
 
 supabase = init_supabase()
@@ -43,7 +43,6 @@ supabase = init_supabase()
 str_lit.markdown(
     """
 <style>
-    /* 1. Stile Base per Scrollbar Globali e Contenitori - Sempre visibili */
     html, body, [data-testid="stAppViewContainer"], [data-testid="stMain"],
     div[data-testid="stVerticalBlockBorderWrapper"],
     div[aria-label="Scrollable container"],
@@ -53,7 +52,6 @@ str_lit.markdown(
         overflow-y: scroll !important;
     }
 
-    /* 2. Regole WebKit per browser Chrome, Edge, Safari (Forzatura visibilità permanente) */
     ::-webkit-scrollbar {
         width: 12px !important;
         height: 12px !important;
@@ -76,11 +74,6 @@ str_lit.markdown(
         opacity: 1 !important;
     }
 
-    ::-webkit-scrollbar-thumb:hover {
-        background-color: #004494 !important;
-    }
-
-    /* Stile pulsanti principali */
     button[kind="primary"], 
     div.stButton > button[kind="primary"], 
     [data-testid="baseButton-primary"],
@@ -110,15 +103,6 @@ str_lit.markdown(
         background-color: #f3f4f6 !important;
         color: #111111 !important;
         border-color: #9ca3af !important;
-    }
-
-    div.stTextInput div[data-baseweb="input"],
-    div.stTextInput div[data-baseweb="input"]:hover,
-    div.stTextInput div[data-baseweb="input"]:focus,
-    div.stTextInput div[data-baseweb="input"]:focus-within,
-    div.stTextInput div[data-baseweb="input"][aria-invalid="true"] {
-        border-color: #0056b3 !important;
-        box-shadow: 0 0 0 1px #0056b3 !important;
     }
 
     .card-desc {
@@ -202,17 +186,30 @@ def carica_dati_esterni():
 
 def salva_dati_esterni():
   try:
-    supabase.table("prodotti_noleggio").delete().neq("id", -1).execute()
+    # Salvataggio sicuro Prodotti (Evita la cancellazione totale della tabella)
     for p in str_lit.session_state.prodotti_noleggio:
       p_to_save = {k: v for k, v in p.items() if k != "id"}
-      supabase.table("prodotti_noleggio").insert(p_to_save).execute()
+      codice_p = p.get("codice")
+      if codice_p:
+        existing = supabase.table("prodotti_noleggio").select("id").eq("codice", codice_p).execute()
+        if existing.data:
+          supabase.table("prodotti_noleggio").update(p_to_save).eq("codice", codice_p).execute()
+        else:
+          supabase.table("prodotti_noleggio").insert(p_to_save).execute()
 
-    supabase.table("eventi_catering").delete().neq("id", -1).execute()
+    # Salvataggio sicuro Eventi
     for ev in str_lit.session_state.eventi_catering:
       ev_to_save = {k: v for k, v in ev.items() if k != "id"}
-      supabase.table("eventi_catering").insert(ev_to_save).execute()
+      nome_ev = ev.get("nome_evento")
+      data_ev = ev.get("data")
+      if nome_ev:
+        existing_ev = supabase.table("eventi_catering").select("id").eq("nome_evento", nome_ev).eq("data", data_ev).execute()
+        if existing_ev.data:
+          supabase.table("eventi_catering").update(ev_to_save).eq("nome_evento", nome_ev).eq("data", data_ev).execute()
+        else:
+          supabase.table("eventi_catering").insert(ev_to_save).execute()
 
-    supabase.table("utenti_autorizzati").delete().neq("id", -1).execute()
+    # Salvataggio sicuro Utenti
     for usr_k, usr_v in str_lit.session_state.utenti_autorizzati.items():
       u_data = {
           "username": usr_k,
@@ -221,7 +218,12 @@ def salva_dati_esterni():
           "nome": usr_v.get("nome"),
           "email": usr_v.get("email"),
       }
-      supabase.table("utenti_autorizzati").insert(u_data).execute()
+      existing_u = supabase.table("utenti_autorizzati").select("id").eq("username", usr_k).execute()
+      if existing_u.data:
+        supabase.table("utenti_autorizzati").update(u_data).eq("username", usr_k).execute()
+      else:
+        supabase.table("utenti_autorizzati").insert(u_data).execute()
+
   except Exception as e:
     str_lit.error(f"Errore durante il salvataggio su Supabase: {e}")
 
@@ -838,6 +840,11 @@ def modale_modifica_evento(idx_ev):
       str_lit.rerun()
 
     if btn_elim_ev:
+      # Elimina anche da Supabase
+      try:
+        supabase.table("eventi_catering").delete().eq("nome_evento", ev_mod.get("nome_evento")).eq("data", ev_mod.get("data")).execute()
+      except:
+        pass
       str_lit.session_state.eventi_catering.pop(idx_ev)
       salva_dati_esterni()
       str_lit.toast("🗑️ Evento eliminato con successo!")
@@ -1235,6 +1242,11 @@ else:
               if str_lit.button(
                   "🗑️ Elimina", key=f"del_{idx}", use_container_width=True
               ):
+                # Rimuovi da Supabase
+                try:
+                  supabase.table("prodotti_noleggio").delete().eq("codice", p.get("codice")).execute()
+                except:
+                  pass
                 str_lit.session_state.prodotti_noleggio.pop(idx)
                 salva_dati_esterni()
                 str_lit.rerun()
@@ -1426,6 +1438,10 @@ else:
                 if str_lit.button(
                     "🗑️ Elimina", key=f"del_usr_{usr_k}", use_container_width=True
                 ):
+                  try:
+                    supabase.table("utenti_autorizzati").delete().eq("username", usr_k).execute()
+                  except:
+                    pass
                   del str_lit.session_state.utenti_autorizzati[usr_k]
                   salva_dati_esterni()
                   str_lit.toast(f"🗑️ Utente '{usr_k}' eliminato.")
