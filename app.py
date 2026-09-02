@@ -7,6 +7,7 @@ import socket
 import uuid
 import qrcode
 import streamlit as str_lit
+from supabase import create_client
 
 try:
   from reportlab.lib import colors
@@ -21,6 +22,14 @@ str_lit.set_page_config(
     page_title="Gestionale Ergo & Scardaci", page_icon="📦", layout="wide"
 )
 
+# Inizializzazione di Supabase dai Secrets di Streamlit Cloud
+try:
+  supabase_url = str_lit.secrets["SUPABASE_URL"]
+  supabase_key = str_lit.secrets["SUPABASE_KEY"]
+  supabase = create_client(supabase_url, supabase_key)
+except Exception as e:
+  supabase = None
+
 UPLOAD_DIR = "immagini_prodotti"
 if not os.path.exists(UPLOAD_DIR):
   os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -28,7 +37,6 @@ if not os.path.exists(UPLOAD_DIR):
 str_lit.markdown(
     """
 <style>
-    /* 1. Stile Base per Scrollbar Globali e Contenitori - Sempre visibili */
     html, body, [data-testid="stAppViewContainer"], [data-testid="stMain"],
     div[data-testid="stVerticalBlockBorderWrapper"],
     div[aria-label="Scrollable container"],
@@ -37,21 +45,17 @@ str_lit.markdown(
         scrollbar-color: #0056b3 #f3f4f6 !important;
         overflow-y: scroll !important;
     }
-
-    /* 2. Regole WebKit per browser Chrome, Edge, Safari (Forzatura visibilità permanente) */
     ::-webkit-scrollbar {
         width: 12px !important;
         height: 12px !important;
         display: block !important;
         visibility: visible !important;
     }
-
     ::-webkit-scrollbar-track {
         background: #f3f4f6 !important;
         border-radius: 6px !important;
         display: block !important;
     }
-
     ::-webkit-scrollbar-thumb {
         background-color: #0056b3 !important;
         border-radius: 6px !important;
@@ -60,12 +64,9 @@ str_lit.markdown(
         visibility: visible !important;
         opacity: 1 !important;
     }
-
     ::-webkit-scrollbar-thumb:hover {
         background-color: #004494 !important;
     }
-
-    /* Stile pulsanti principali */
     button[kind="primary"], 
     div.stButton > button[kind="primary"], 
     [data-testid="baseButton-primary"],
@@ -83,7 +84,6 @@ str_lit.markdown(
         background-color: #004494 !important;
         color: white !important;
     }
-    
     div.stButton > button:not([kind="primary"]), .stButton > button:not([kind="primary"]) {
         background-color: #ffffff !important;
         color: #333333 !important;
@@ -96,16 +96,6 @@ str_lit.markdown(
         color: #111111 !important;
         border-color: #9ca3af !important;
     }
-
-    div.stTextInput div[data-baseweb="input"],
-    div.stTextInput div[data-baseweb="input"]:hover,
-    div.stTextInput div[data-baseweb="input"]:focus,
-    div.stTextInput div[data-baseweb="input"]:focus-within,
-    div.stTextInput div[data-baseweb="input"][aria-invalid="true"] {
-        border-color: #0056b3 !important;
-        box-shadow: 0 0 0 1px #0056b3 !important;
-    }
-
     .card-desc {
         height: 45px;
         color: #555;
@@ -117,7 +107,6 @@ str_lit.markdown(
     unsafe_allow_html=True,
 )
 
-FILE_DATI = "dati_gestionale.json"
 CATEGORIE_PRODOTTI = [
     "TAVOLI",
     "SEDIE",
@@ -155,29 +144,129 @@ LISTA_RUOLI_DISPONIBILI = [
     "Magazzino2",
 ]
 
+# Funzioni di sincronizzazione con Supabase
+def carica_dati_da_supabase():
+  prodotti = []
+  eventi = []
+  utenti = {}
 
-def carica_dati_esterni():
-  if os.path.exists(FILE_DATI):
+  if supabase:
     try:
-      with open(FILE_DATI, "r", encoding="utf-8") as f:
-        return json.load(f)
-    except:
+      res_prod = supabase.table("prodotti").select("*").execute()
+      if res_prod.data:
+        prodotti = res_prod.data
+    except Exception:
       pass
-  return None
 
+    try:
+      res_ev = supabase.table("eventi").select("*").execute()
+      if res_ev.data:
+        eventi = res_ev.data
+    except Exception:
+      pass
 
-def salva_dati_esterni():
-  dati = {
-      "prodotti_noleggio": str_lit.session_state.prodotti_noleggio,
-      "eventi_catering": str_lit.session_state.eventi_catering,
-      "utenti_autorizzati": str_lit.session_state.utenti_autorizzati,
-  }
-  with open(FILE_DATI, "w", encoding="utf-8") as f:
-    json.dump(dati, f, ensure_ascii=False, indent=4)
+    try:
+      res_usr = supabase.table("utenti").select("*").execute()
+      if res_usr.data:
+        for u in res_usr.data:
+          utenti[u["username"]] = {
+              "password": u["password"],
+              "ruolo": u["ruolo"],
+              "nome": u["nome"],
+              "email": u["email"]
+          }
+    except Exception:
+      pass
 
+  # Default utenti se vuoti
+  if not utenti:
+    utenti = {
+        "admin": {
+            "password": "123",
+            "ruolo": "Amministratore",
+            "nome": "Gianluca (Admin)",
+            "email": "admin@gestionale.it",
+        },
+        "wedding": {
+            "password": "wedding123",
+            "ruolo": "Wedding",
+            "nome": "Cristina (Wedding Planner)",
+            "email": "wedding@gestionale.it",
+        },
+        "cucina": {
+            "password": "cucina123",
+            "ruolo": "Cucina",
+            "nome": "Chef Cucina",
+            "email": "cucina@gestionale.it",
+        },
+        "sala": {
+            "password": "sala123",
+            "ruolo": "Sala",
+            "nome": "Responsabile Sala",
+            "email": "sala@gestionale.it",
+        },
+        "magazzino": {
+            "password": "mag123",
+            "ruolo": "Magazzino",
+            "nome": "Addetto Magazzino",
+            "email": "magazzino@gestionale.it",
+        },
+        "magazzino2": {
+            "password": "mag2123",
+            "ruolo": "Magazzino2",
+            "nome": "Assistente Magazzino",
+            "email": "magazzino2@gestionale.it",
+        },
+    }
 
-dati_salvati = carica_dati_esterni()
+  return prodotti, eventi, utenti
 
+def sincronizza_prodotti_su_db():
+  if not supabase:
+    return
+  try:
+    supabase.table("prodotti").delete().neq("id", 0).execute()
+    for p in str_lit.session_state.prodotti_noleggio:
+      p_clean = {k: v for k, v in p.items() if k != "id"}
+      supabase.table("prodotti").insert(p_clean).execute()
+  except Exception:
+    pass
+
+def sincronizza_eventi_su_db():
+  if not supabase:
+    return
+  try:
+    supabase.table("eventi").delete().neq("id", 0).execute()
+    for ev in str_lit.session_state.eventi_catering:
+      ev_clean = {k: v for k, v in ev.items() if k != "id"}
+      supabase.table("eventi").insert(ev_clean).execute()
+  except Exception:
+    pass
+
+def sincronizza_utenti_su_db():
+  if not supabase:
+    return
+  try:
+    supabase.table("utenti").delete().neq("id", 0).execute()
+    for usr, dati in str_lit.session_state.utenti_autorizzati.items():
+      payload = {
+          "username": usr,
+          "password": dati.get("password"),
+          "ruolo": dati.get("ruolo"),
+          "nome": dati.get("nome"),
+          "email": dati.get("email")
+      }
+      supabase.table("utenti").insert(payload).execute()
+  except Exception:
+    pass
+
+# Caricamento iniziale in session state
+if "dati_caricati" not in str_lit.session_state:
+  p_db, e_db, u_db = carica_dati_da_supabase()
+  str_lit.session_state.prodotti_noleggio = p_db
+  str_lit.session_state.eventi_catering = e_db
+  str_lit.session_state.utenti_autorizzati = u_db
+  str_lit.session_state.dati_caricati = True
 
 def get_local_ip():
   try:
@@ -189,10 +278,8 @@ def get_local_ip():
   except:
     return "localhost"
 
-
 LOCAL_IP = get_local_ip()
 BASE_URL = f"http://{LOCAL_IP}:8501"
-
 
 def get_base64_image(nome_base):
   for ext in [".png", ".jpg", ".jpeg"]:
@@ -200,7 +287,6 @@ def get_base64_image(nome_base):
       with open(nome_base + ext, "rb") as img_file:
         return base64.b64encode(img_file.read()).decode("utf-8")
   return None
-
 
 def get_image_base64_from_path(path):
   if path and os.path.exists(path):
@@ -210,7 +296,6 @@ def get_image_base64_from_path(path):
     except:
       pass
   return None
-
 
 def html_thumb(path, size=110):
   b64 = get_image_base64_from_path(path)
@@ -230,7 +315,6 @@ def html_thumb(path, size=110):
         " auto;'>No Foto</div>"
     )
 
-
 def salva_immagine_su_disco(uploaded_file):
   if uploaded_file is not None:
     ext = os.path.splitext(uploaded_file.name)[1]
@@ -240,7 +324,6 @@ def salva_immagine_su_disco(uploaded_file):
       f.write(uploaded_file.getbuffer())
     return percorso_file
   return None
-
 
 @str_lit.cache_data
 def genera_qrcode_img(testo):
@@ -257,7 +340,6 @@ def genera_qrcode_img(testo):
   img.save(buffer, format="PNG")
   return buffer.getvalue()
 
-
 def parse_data_evento(d_str):
   if not d_str:
     return datetime(2026, 1, 1)
@@ -268,11 +350,9 @@ def parse_data_evento(d_str):
       continue
   return datetime(2026, 1, 1)
 
-
 def genera_testo_lista_attrezzature(nome_evento, lista_prodotti):
   testo = f"LISTA ATTREZZATURE PER EVENTO: {nome_evento}\n"
   testo += "=" * 55 + "\n\n"
-
   prodotti_per_cat = {}
   for item in lista_prodotti:
     cat = item.get("categoria", "ALTRO")
@@ -286,7 +366,6 @@ def genera_testo_lista_attrezzature(nome_evento, lista_prodotti):
       testo += f"• {item.get('nome')} (ID: {item.get('codice', '-')}) | Q.tà: {item.get('quantita_selezionata', 1)}\n"
     testo += "\n"
   return testo.encode("utf-8")
-
 
 def genera_pdf_lista_attrezzature(nome_evento, lista_prodotti):
   buffer = BytesIO()
@@ -332,7 +411,6 @@ def genera_pdf_lista_attrezzature(nome_evento, lista_prodotti):
 
   for cat, items in prodotti_per_cat.items():
     story.append(Paragraph(f"<b>Reparto / Categoria: {cat}</b>", cat_style))
-
     table_data = [["Foto", "Prodotto", "Codice", "Q.tà"]]
     for item in items:
       img_obj = ""
@@ -375,64 +453,6 @@ def genera_pdf_lista_attrezzature(nome_evento, lista_prodotti):
   doc.build(story)
   return buffer.getvalue()
 
-
-if "utenti_autorizzati" not in str_lit.session_state:
-  if dati_salvati and "utenti_autorizzati" in dati_salvati:
-    str_lit.session_state.utenti_autorizzati = dati_salvati[
-        "utenti_autorizzati"
-    ]
-  else:
-    str_lit.session_state.utenti_autorizzati = {
-        "admin": {
-            "password": "123",
-            "ruolo": "Amministratore",
-            "nome": "Gianluca (Admin)",
-            "email": "admin@gestionale.it",
-        },
-        "wedding": {
-            "password": "wedding123",
-            "ruolo": "Wedding",
-            "nome": "Cristina (Wedding Planner)",
-            "email": "wedding@gestionale.it",
-        },
-        "cucina": {
-            "password": "cucina123",
-            "ruolo": "Cucina",
-            "nome": "Chef Cucina",
-            "email": "cucina@gestionale.it",
-        },
-        "sala": {
-            "password": "sala123",
-            "ruolo": "Sala",
-            "nome": "Responsabile Sala",
-            "email": "sala@gestionale.it",
-        },
-        "magazzino": {
-            "password": "mag123",
-            "ruolo": "Magazzino",
-            "nome": "Addetto Magazzino",
-            "email": "magazzino@gestionale.it",
-        },
-        "magazzino2": {
-            "password": "mag2123",
-            "ruolo": "Magazzino2",
-            "nome": "Assistente Magazzino",
-            "email": "magazzino2@gestionale.it",
-        },
-    }
-
-if "prodotti_noleggio" not in str_lit.session_state:
-  if dati_salvati and "prodotti_noleggio" in dati_salvati:
-    str_lit.session_state.prodotti_noleggio = dati_salvati["prodotti_noleggio"]
-  else:
-    str_lit.session_state.prodotti_noleggio = []
-
-if "eventi_catering" not in str_lit.session_state:
-  if dati_salvati and "eventi_catering" in dati_salvati:
-    str_lit.session_state.eventi_catering = dati_salvati["eventi_catering"]
-  else:
-    str_lit.session_state.eventi_catering = []
-
 if "lista_attrezzature_corrente" not in str_lit.session_state:
   str_lit.session_state.lista_attrezzature_corrente = []
 
@@ -456,7 +476,6 @@ if codice_scansionato and str_lit.session_state.area_selezionata is None:
 logo_noleggio_b64 = get_base64_image("logo_noleggio")
 logo_catering_b64 = get_base64_image("logo_catering")
 logo_principale_b64 = get_base64_image("logo")
-
 
 @str_lit.dialog("📦 Gestione Prodotto Magazzino", width="large")
 def modale_gestione_prodotto():
@@ -531,12 +550,11 @@ def modale_gestione_prodotto():
       else:
         str_lit.session_state.prodotti_noleggio.append(nuovo_item)
 
-      salva_dati_esterni()
+      sincronizza_prodotti_su_db()
       str_lit.toast(f"✅ Prodotto '{f_nome}' salvato con successo!")
       str_lit.session_state.modale_prodotto = None
       str_lit.session_state.prodotto_in_modifica = None
       str_lit.rerun()
-
 
 @str_lit.dialog("🆕 Crea Nuovo Evento", width="large")
 def modale_crea_evento():
@@ -592,7 +610,6 @@ def modale_crea_evento():
       if not n_nome.strip():
         str_lit.error("Il campo 'Nome Evento / Cliente' è obbligatorio.")
       else:
-
         def process_files(files):
           res = []
           if files:
@@ -622,10 +639,9 @@ def modale_crea_evento():
             "allegati_magazzino": process_files(f_mag),
         }
         str_lit.session_state.eventi_catering.append(nuovo_ev)
-        salva_dati_esterni()
+        sincronizza_eventi_su_db()
         str_lit.toast("✅ Evento creato con successo!")
         str_lit.rerun()
-
 
 @str_lit.dialog("✏️ Modifica Evento", width="large")
 def modale_modifica_evento(idx_ev):
@@ -723,7 +739,6 @@ def modale_modifica_evento(idx_ev):
       )
 
     if btn_salva_ev:
-
       def filtra_e_unisci_allegati(existing_list, nuovi_files, chiave_testo):
         risultati = []
         if existing_list:
@@ -766,16 +781,15 @@ def modale_modifica_evento(idx_ev):
               curr_mag, mf_mag, "note_magazzino"
           ),
       })
-      salva_dati_esterni()
+      sincronizza_eventi_su_db()
       str_lit.toast("✅ Modifiche salvate con successo!")
       str_lit.rerun()
 
     if btn_elim_ev:
       str_lit.session_state.eventi_catering.pop(idx_ev)
-      salva_dati_esterni()
+      sincronizza_eventi_su_db()
       str_lit.toast("🗑️ Evento eliminato con successo!")
       str_lit.rerun()
-
 
 if str_lit.session_state.utente_loggato is None:
   str_lit.markdown("<br><br>", unsafe_allow_html=True)
@@ -1044,7 +1058,6 @@ else:
       str_lit.stop()
 
     if str_lit.session_state.area_selezionata == "opzione_1":
-      
       str_lit.subheader("📦 Magazzino & Noleggio Attrezzature")
 
       col_btn_nuovo, col_cat_filtro, col_search = str_lit.columns([1, 1.5, 2.5])
@@ -1163,13 +1176,13 @@ else:
                 nuovo_p = p.copy()
                 nuovo_p["codice"] = p.get("codice", "") + "-COPIA"
                 str_lit.session_state.prodotti_noleggio.append(nuovo_p)
-                salva_dati_esterni()
+                sincronizza_prodotti_su_db()
                 str_lit.rerun()
               if str_lit.button(
                   "🗑️ Elimina", key=f"del_{idx}", use_container_width=True
               ):
                 str_lit.session_state.prodotti_noleggio.pop(idx)
-                salva_dati_esterni()
+                sincronizza_prodotti_su_db()
                 str_lit.rerun()
               str_lit.markdown("</div>", unsafe_allow_html=True)
 
@@ -1191,7 +1204,6 @@ else:
             " sopra."
         )
       else:
-
         def sort_key_evento(item):
           idx, ev = item
           d_str = ev.get("data", "")
@@ -1334,7 +1346,7 @@ else:
                   "nome": ins_nome.strip() or ins_user_key.strip(),
                   "email": ins_email.strip(),
               }
-              salva_dati_esterni()
+              sincronizza_utenti_su_db()
               str_lit.toast(f"✅ Utente '{ins_user_key}' creato con successo!")
               str_lit.rerun()
 
@@ -1360,7 +1372,7 @@ else:
                     "🗑️ Elimina", key=f"del_usr_{usr_k}", use_container_width=True
                 ):
                   del str_lit.session_state.utenti_autorizzati[usr_k]
-                  salva_dati_esterni()
+                  sincronizza_utenti_su_db()
                   str_lit.toast(f"🗑️ Utente '{usr_k}' eliminato.")
                   str_lit.rerun()
               else:
@@ -1382,7 +1394,6 @@ else:
         with col_cat:
           with str_lit.container(border=True):
             str_lit.markdown("#### 🔍 Catalogo Prodotti")
-            
             cat_opzioni = ["Tutte le categorie"] + CATEGORIE_PRODOTTI
             cat_selezionata_filtro = str_lit.selectbox(
                 "📂 Seleziona Categoria", cat_opzioni, key="filtro_cat_catalogo"
@@ -1393,7 +1404,6 @@ else:
 
           prod_disp = str_lit.session_state.prodotti_noleggio
           t_ricerca = ricerca_cat.strip().lower()
-
           mostra_prodotti = (t_ricerca != "") or (cat_selezionata_filtro != "Tutte le categorie")
 
           if not mostra_prodotti:
@@ -1489,7 +1499,6 @@ else:
               )
             else:
               str_lit.markdown("##### 📂 Divisione per Categoria")
-
               prodotti_per_cat = {}
               for item in str_lit.session_state.lista_attrezzature_corrente:
                 cat = item.get("categoria", "ALTRO")
@@ -1499,7 +1508,6 @@ else:
 
               for cat_nome, lista_cat in prodotti_per_cat.items():
                 colore_cat = COLORI_CATEGORIE.get(cat_nome, "#4b5563")
-                
                 str_lit.markdown(
                     f"<div style='background-color: {colore_cat}; color: white; padding: 8px 12px; "
                     f"border-radius: 6px; font-weight: bold; margin-top: 12px; margin-bottom: 8px; "
@@ -1613,7 +1621,7 @@ else:
                         nota_esistente + testo_aggiunta
                     ).strip()
 
-                    salva_dati_esterni()
+                    sincronizza_eventi_su_db()
                     str_lit.toast(f"✅ Lista attrezzature inoltrata all'evento '{ev_target.get('nome_evento')}'!")
                     str_lit.session_state.lista_attrezzature_corrente = []
                     str_lit.rerun()
