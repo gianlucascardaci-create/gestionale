@@ -1729,7 +1729,7 @@ def salva_dati_esterni():
         else:
           supabase.table("eventi_catering").insert(ev_to_save).execute()
 
-    for usr_k, usr_v in str_lit.session_state.utenti_autorizzati.items():
+    for usr_k, usr_v in st.file_uploader.session_state.utenti_autorizzati.items():
       u_data = {
           "username": usr_k,
           "password": usr_v.get("password"),
