@@ -1,0 +1,183 @@
+{
+    "prodotti_noleggio": [
+        {
+            "codice": "abc0",
+            "nome": "sotto piatto ouverture",
+            "categoria": "TAVOLI",
+            "quantita": 8,
+            "posizione": "",
+            "costo_noleggio": 0.07,
+            "note": "ssw",
+            "foto_path": "immagini_prodotti/e2ba7413-f143-4f00-9fbf-8843b454dc6f.png"
+        },
+        {
+            "codice": "12345678",
+            "nome": "albero 2 ",
+            "categoria": "BICCHIERI",
+            "quantita": 4,
+            "posizione": "",
+            "costo_noleggio": 0.0,
+            "note": "",
+            "foto_path": "immagini_prodotti/024a9574-c11e-4445-b328-4653cdfc77bc.jpg"
+        },
+        {
+            "codice": "yrrtttrr",
+            "nome": "piatto ouverture",
+            "categoria": "PIATTI E SOTTOPIATTI",
+            "quantita": 7,
+            "posizione": "",
+            "costo_noleggio": 0.0,
+            "note": "",
+            "foto_path": "immagini_prodotti/fcbf06b5-2fba-444e-a96c-e891010eb71c.png"
+        },
+        {
+            "codice": "",
+            "nome": "feqrrqw3",
+            "categoria": "PIATTI E SOTTOPIATTI",
+            "quantita": 4,
+            "posizione": "",
+            "costo_noleggio": 0.0,
+            "note": "",
+            "foto_b64": null
+        },
+        {
+            "codice": "",
+            "nome": "erreefasfde",
+            "categoria": "ARREDO",
+            "quantita": 133,
+            "posizione": "",
+            "costo_noleggio": 0.0,
+            "note": "",
+            "foto_b64": null
+        },
+        {
+            "codice": "",
+            "nome": "w23233",
+            "categoria": "TAVOLI",
+            "quantita": 1,
+            "posizione": "",
+            "costo_noleggio": 0.0,
+            "note": "",
+            "foto_path": null
+        },
+        {
+            "codice": "",
+            "nome": "7yu47u764",
+            "categoria": "TAVOLI",
+            "quantita": 1,
+            "posizione": "",
+            "costo_noleggio": 0.0,
+            "note": "",
+            "foto_path": null
+        },
+        {
+            "codice": "",
+            "nome": "75ere566565",
+            "categoria": "TAVOLI",
+            "quantita": 1,
+            "posizione": "",
+            "costo_noleggio": 0.0,
+            "note": "",
+            "foto_path": null
+        },
+        {
+            "codice": "",
+            "nome": "6t656565",
+            "categoria": "TAVOLI",
+            "quantita": 1,
+            "posizione": "",
+            "costo_noleggio": 0.0,
+            "note": "",
+            "foto_path": null
+        },
+        {
+            "codice": "",
+            "nome": "655y5tuher",
+            "categoria": "TAVOLI",
+            "quantita": 1,
+            "posizione": "",
+            "costo_noleggio": 0.0,
+            "note": "",
+            "foto_path": null
+        },
+        {
+            "codice": "",
+            "nome": "i89ooliiooi",
+            "categoria": "TAVOLI",
+            "quantita": 1,
+            "posizione": "",
+            "costo_noleggio": 0.0,
+            "note": "",
+            "foto_path": null
+        },
+        {
+            "codice": "",
+            "nome": "ioyiuiry5e3",
+            "categoria": "TAVOLI",
+            "quantita": 1,
+            "posizione": "",
+            "costo_noleggio": 0.0,
+            "note": "",
+            "foto_path": null
+        },
+        {
+            "codice": "aq",
+            "nome": "\\1q1",
+            "categoria": "TAVOLI",
+            "quantita": 1,
+            "posizione": "",
+            "costo_noleggio": 0.0,
+            "note": "",
+            "foto_path": null
+        },
+        {
+            "codice": "",
+            "nome": "1ew21er",
+            "categoria": "TAVOLI",
+            "quantita": 1,
+            "posizione": "",
+            "costo_noleggio": 0.0,
+            "note": "",
+            "foto_path": null
+        }
+    ],
+    "eventi_catering": [],
+    "utenti_autorizzati": {
+        "admin": {
+            "password": "123",
+            "ruolo": "Amministratore",
+            "nome": "Gianluca (Admin)",
+            "email": "admin@gestionale.it"
+        },
+        "cucina1": {
+            "password": "cucina2",
+            "ruolo": "Cucina",
+            "nome": "cucina stefano",
+            "email": ""
+        },
+        "sala1": {
+            "password": "sala2",
+            "ruolo": "Sala",
+            "nome": "sala alfio",
+            "email": ""
+        },
+        "roberta1": {
+            "password": "roberta2",
+            "ruolo": "Wedding",
+            "nome": "wedding",
+            "email": ""
+        },
+        "magazzino1": {
+            "password": "magazzino2",
+            "ruolo": "Magazzino",
+            "nome": "magazzino1",
+            "email": ""
+        },
+        "magazzino2": {
+            "password": "magazzino3",
+            "ruolo": "Magazzino2",
+            "nome": "magazzino2",
+            "email": ""
+        }
+    }
+}
