@@ -158,6 +158,7 @@ LISTA_RUOLI_DISPONIBILI = [
 ]
 
 
+@str_lit.cache_data(ttl=30, show_spinner=False)
 def carica_dati_esterni():
   try:
     # Vengono richiesti solo i campi necessari; gli allegati restano nel DB
@@ -240,6 +241,8 @@ def salva_dati_esterni():
         res = supabase.table("utenti_autorizzati").insert(payload).execute()
       if not res.data and not existing.data:
         raise RuntimeError(f"Utente non salvato: {usr_k}")
+
+    carica_dati_esterni.clear()
   except Exception as e:
     str_lit.error(f"Errore durante il salvataggio su Supabase: {e}")
 
@@ -258,8 +261,8 @@ def get_local_ip():
     return "localhost"
 
 
-LOCAL_IP = get_local_ip()
-BASE_URL = f"http://{LOCAL_IP}:8501"
+# Il link relativo funziona sia in locale sia su Streamlit Cloud.
+BASE_URL = ""
 
 
 def get_base64_image(nome_base):
@@ -308,7 +311,7 @@ def salva_immagine_su_disco(uploaded_file):
       nome_file_unico = f"{uuid.uuid4()}{ext}"
       file_bytes = uploaded_file.getvalue()
       supabase.storage.from_(BUCKET_IMMAGINI).upload(
-          file_path=nome_file_unico,
+          path=nome_file_unico,
           file=file_bytes,
           file_options={"content-type": uploaded_file.type},
       )
