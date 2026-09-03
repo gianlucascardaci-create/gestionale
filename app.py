@@ -307,13 +307,23 @@ def html_thumb(path, size=110):
 def salva_immagine_su_disco(uploaded_file):
   if uploaded_file is not None:
     try:
-      ext = os.path.splitext(uploaded_file.name)[1]
-      nome_file_unico = f"{uuid.uuid4()}{ext}"
-      file_bytes = uploaded_file.getvalue()
+      from PIL import Image, ImageOps
+
+      # Ridimensiona e comprime la foto per risparmiare spazio e velocizzare
+      # il caricamento. L'originale non viene mai salvato nel database.
+      immagine = Image.open(uploaded_file)
+      immagine = ImageOps.exif_transpose(immagine).convert("RGB")
+      immagine.thumbnail((2400, 2400), Image.Resampling.LANCZOS)
+
+      buffer = BytesIO()
+      immagine.save(buffer, format="JPEG", quality=90, optimize=True, progressive=True)
+      file_bytes = buffer.getvalue()
+      nome_file_unico = f"{uuid.uuid4()}.jpg"
+
       supabase.storage.from_(BUCKET_IMMAGINI).upload(
           path=nome_file_unico,
           file=file_bytes,
-          file_options={"content-type": uploaded_file.type},
+          file_options={"content-type": "image/jpeg", "upsert": "false"},
       )
       public_url = supabase.storage.from_(BUCKET_IMMAGINI).get_public_url(nome_file_unico)
       return public_url
