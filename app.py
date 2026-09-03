@@ -898,12 +898,27 @@ def modale_modifica_evento(idx_ev):
 
 if str_lit.session_state.utente_loggato is None:
   str_lit.markdown("<br><br>", unsafe_allow_html=True)
-  html_loghi_login = '<div style="display: flex; justify-content: center; align-items: center; gap: 100px; margin-bottom: 40px;">'
+  html_loghi_login = """
+  <div style="display:flex; justify-content:center; align-items:center;
+              gap:90px; margin-bottom:40px; min-height:220px;">
+    <div style="width:260px; height:220px; display:flex;
+                align-items:center; justify-content:center; overflow:visible;">
+  """
   if logo_noleggio_b64:
-    html_loghi_login += f'<img src="data:image/png;base64,{logo_noleggio_b64}" style="max-height: 200px; object-fit: contain;">'
+    html_loghi_login += f'<img src="data:image/png;base64,{logo_noleggio_b64}" style="width:250px; height:210px; object-fit:contain; display:block;">'
+  html_loghi_login += """
+    </div>
+    <div style="width:260px; height:220px; display:flex;
+                align-items:center; justify-content:center; overflow:visible;">
+  """
   if logo_catering_b64:
-    html_loghi_login += f'<img src="data:image/png;base64,{logo_catering_b64}" style="max-height: 200px; object-fit: contain;">'
-  html_loghi_login += "</div>"
+    # Il logo Catering contiene più spazio vuoto nel file originale: lo
+    # ingrandiamo otticamente senza deformarlo, per bilanciare i due marchi.
+    html_loghi_login += f'<img src="data:image/png;base64,{logo_catering_b64}" style="width:250px; height:210px; object-fit:contain; display:block; transform:scale(1.35);">'
+  html_loghi_login += """
+    </div>
+  </div>
+  """
 
   str_lit.markdown(html_loghi_login, unsafe_allow_html=True)
   str_lit.markdown(
@@ -963,7 +978,7 @@ else:
       )
     else:
       str_lit.markdown(
-          "<h1 style='text-align: center; margin-bottom: 0;'>🌟 Gestionale"
+          "<h1 style='text-align: center; margin-bottom: 0;'>🔷 Gestionale"
           " Ergo & Scardaci</h1>",
           unsafe_allow_html=True,
       )
@@ -1018,7 +1033,7 @@ else:
                 ' justify-content: center; margin-bottom: 15px;"><img'
                 f' src="data:image/png;base64,{logo_catering_b64}"'
                 ' style="max-height: 100%; max-width: 100%; object-fit:'
-                ' contain;"></div>',
+                ' contain; transform: scale(1.45);"></div>',
                 unsafe_allow_html=True,
             )
           else:
