@@ -914,7 +914,7 @@ if str_lit.session_state.utente_loggato is None:
   if logo_catering_b64:
     # Il logo Catering contiene più spazio vuoto nel file originale: lo
     # ingrandiamo otticamente senza deformarlo, per bilanciare i due marchi.
-    html_loghi_login += f'<img src="data:image/png;base64,{logo_catering_b64}" style="width:310px; height:245px; object-fit:contain; display:block;">'
+    html_loghi_login += f'<img src="data:image/png;base64,{logo_catering_b64}" style="width:360px; height:285px; object-fit:contain; display:block; transform:scale(1.30);">'
   html_loghi_login += """
     </div>
   </div>
@@ -978,7 +978,7 @@ else:
       )
     else:
       str_lit.markdown(
-          "<h1 style='text-align: center; margin: 0; color: #0056b3 !important; font-size: 2.35rem; font-weight: 700; letter-spacing: -0.02em;'>Gestionale Ergo &amp; Scardaci</h1>",
+          "<h1 style='text-align: center; margin: 0; color: #0056b3 !important; font-size: 2.55rem; font-weight: 700; letter-spacing: -0.02em;'>Gestionale Ergo &amp; Scardaci</h1>",
           unsafe_allow_html=True,
       )
 
