@@ -1450,8 +1450,30 @@ else:
                       key=f"dl_tutti_all_{idx_ev}_{att['nome_file']}",
                   )
 
-              if is_cucina:
+              if is_admin or is_wedding:
+                str_lit.markdown("**Note per la sala:**")
+                str_lit.warning(ev.get("note_sala") or "Nessuna nota.")
+                str_lit.markdown("**Note per la cucina:**")
+                str_lit.success(ev.get("note_cucina") or "Nessuna nota.")
+                str_lit.markdown("**Note per il magazzino:**")
+                str_lit.error(ev.get("note_magazzino") or "Nessuna nota.")
 
+                for chiave, etichetta, prefisso in ((
+                    ("allegati_sala", "Allegati Sala", "all_sala"),
+                    ("allegati_cucina", "Allegati Cucina", "all_cucina"),
+                    ("allegati_magazzino", "Allegati Magazzino", "all_mag"),
+                )):
+                  allegati_reparto = ev.get(chiave) or []
+                  if allegati_reparto:
+                    str_lit.markdown(f"📎 **{etichetta}:**")
+                    for att in allegati_reparto:
+                      str_lit.download_button(
+                          f"📥 Scarica allegato: {att['nome_file']}",
+                          data=base64.b64decode(att["dati_b64"]),
+                          file_name=att["nome_file"],
+                          key=f"dl_{prefisso}_{idx_ev}_{att['nome_file']}",
+                      )
+              elif is_cucina:
                 str_lit.markdown("**Note per la cucina:**")
                 str_lit.success(ev.get("note_cucina") or "Nessuna nota.")
                 if ev.get("allegati_cucina"):
@@ -1484,30 +1506,6 @@ else:
                         file_name=att["nome_file"],
                         key=f"dl_mag_{idx_ev}_{att['nome_file']}",
                     )
-              elif is_wedding:
-                str_lit.markdown("**Note per la sala:**")
-                str_lit.warning(ev.get("note_sala") or "Nessuna nota.")
-                str_lit.markdown("**Note per la cucina:**")
-                str_lit.success(ev.get("note_cucina") or "Nessuna nota.")
-                str_lit.markdown("**Note per il magazzino:**")
-                str_lit.error(ev.get("note_magazzino") or "Nessuna nota.")
-
-                # La Wedding può consultare anche gli allegati dei singoli reparti.
-                for chiave, etichetta, prefisso in (
-                    ("allegati_sala", "Allegati Sala", "w_sala"),
-                    ("allegati_cucina", "Allegati Cucina", "w_cucina"),
-                    ("allegati_magazzino", "Allegati Magazzino", "w_mag"),
-                ):
-                  allegati_reparto = ev.get(chiave) or []
-                  if allegati_reparto:
-                    str_lit.markdown(f"📎 **{etichetta}:**")
-                    for att in allegati_reparto:
-                      str_lit.download_button(
-                          f"📥 Scarica allegato: {att['nome_file']}",
-                          data=base64.b64decode(att["dati_b64"]),
-                          file_name=att["nome_file"],
-                          key=f"dl_{prefisso}_{idx_ev}_{att['nome_file']}",
-                      )
 
     elif str_lit.session_state.area_selezionata == "opzione_3":
       if is_admin:
