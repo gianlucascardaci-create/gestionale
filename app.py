@@ -930,8 +930,9 @@ def modale_modifica_evento(idx_ev):
       str_lit.rerun()
 
     if btn_elim_ev:
+      # Il submit del form provoca già il rerun: non forziamo un secondo
+      # rerun, altrimenti la finestra di dialogo si chiude prima della conferma.
       str_lit.session_state[f"eliminazione_evento_in_attesa_{idx_ev}"] = True
-      str_lit.rerun()
 
 
 if str_lit.session_state.utente_loggato is None:
