@@ -257,6 +257,31 @@ def salva_dati_esterni():
     str_lit.error(f"Errore durante il salvataggio su Supabase: {e}")
 
 
+def salva_evento_singolo(ev):
+  """Salva soltanto un evento, evitando il lento salvataggio globale."""
+  try:
+    payload = {k: ev.get(k) for k in (
+        "nome_evento", "data", "data_display", "location", "ospiti",
+        "bambini", "staff", "note_tutti", "allegati_tutti", "note_sala",
+        "allegati_sala", "note_cucina", "allegati_cucina",
+        "note_magazzino", "allegati_magazzino")}
+    payload = {k: v for k, v in payload.items() if v is not None}
+    if ev.get("id"):
+      res = supabase.table("eventi_catering").update(payload).eq("id", ev["id"]).execute()
+    else:
+      res = supabase.table("eventi_catering").insert(payload).execute()
+      if res.data:
+        ev["id"] = res.data[0].get("id")
+    if not res.data:
+      raise RuntimeError("Evento non salvato")
+    carica_dati_esterni.clear()
+    carica_eventi_solo_quando_servono.clear()
+    return True
+  except Exception as e:
+    str_lit.error(f"Errore durante il salvataggio dell’evento: {e}")
+    return False
+
+
 dati_salvati = carica_dati_esterni()
 
 
@@ -733,7 +758,7 @@ def modale_crea_evento():
             "allegati_magazzino": process_files(f_mag),
         }
         str_lit.session_state.eventi_catering.append(nuovo_ev)
-        salva_dati_esterni()
+        salva_evento_singolo(nuovo_ev)
         str_lit.toast("✅ Evento creato con successo!")
         str_lit.rerun()
 
@@ -823,20 +848,27 @@ def modale_modifica_evento(idx_ev):
         "Note per il magazzino", "note_magazzino", "allegati_magazzino"
     )
 
-    conferma_eliminazione_evento = str_lit.checkbox(
-        "Confermo di voler eliminare definitivamente questo evento",
-        key=f"conferma_elimina_evento_{idx_ev}",
-    )
-
-    col_btn_mod1, col_btn_mod2 = str_lit.columns(2)
-    with col_btn_mod1:
+    with str_lit.form(key=f"form_azioni_evento_{idx_ev}"):
       btn_salva_ev = str_lit.form_submit_button(
           "💾 Salva Modifiche", type="primary", use_container_width=True
       )
-    with col_btn_mod2:
-      btn_elim_ev = str_lit.form_submit_button(
-          "🗑️ Elimina Evento", use_container_width=True
-      )
+
+    with str_lit.popover("🗑️ Elimina Evento", use_container_width=True):
+      str_lit.warning("Questa operazione è definitiva e non può essere annullata.")
+      if str_lit.button(
+          "Conferma eliminazione", key=f"conferma_elimina_evento_{idx_ev}",
+          type="primary", use_container_width=True,
+      ):
+        try:
+          if ev_mod.get("id"):
+            supabase.table("eventi_catering").delete().eq("id", ev_mod.get("id")).execute()
+          else:
+            supabase.table("eventi_catering").delete().eq("nome_evento", ev_mod.get("nome_evento")).eq("data", ev_mod.get("data")).execute()
+        except:
+          pass
+        str_lit.session_state.eventi_catering.pop(idx_ev)
+        str_lit.toast("🗑️ Evento eliminato con successo!")
+        str_lit.rerun()
 
     if btn_salva_ev:
 
@@ -882,26 +914,10 @@ def modale_modifica_evento(idx_ev):
               curr_mag, mf_mag, "note_magazzino"
           ),
       })
-      salva_dati_esterni()
+      salva_evento_singolo(ev_mod)
       str_lit.toast("✅ Modifiche salvate con successo!")
       str_lit.rerun()
 
-    if btn_elim_ev:
-      if not conferma_eliminazione_evento:
-        str_lit.warning("Per eliminare l’evento devi prima spuntare la conferma.")
-      else:
-        # Elimina anche da Supabase solo dopo conferma esplicita.
-        try:
-          if ev_mod.get("id"):
-            supabase.table("eventi_catering").delete().eq("id", ev_mod.get("id")).execute()
-          else:
-            supabase.table("eventi_catering").delete().eq("nome_evento", ev_mod.get("nome_evento")).eq("data", ev_mod.get("data")).execute()
-        except:
-          pass
-        str_lit.session_state.eventi_catering.pop(idx_ev)
-        salva_dati_esterni()
-        str_lit.toast("🗑️ Evento eliminato con successo!")
-        str_lit.rerun()
 
 
 if str_lit.session_state.utente_loggato is None:
@@ -1318,17 +1334,14 @@ else:
                 str_lit.session_state.prodotti_noleggio.append(nuovo_p)
                 salva_dati_esterni()
                 str_lit.rerun()
-              conferma_eliminazione_prodotto = str_lit.checkbox(
-                  "Confermo eliminazione",
-                  key=f"conferma_elimina_prodotto_{idx}",
-              )
-              if str_lit.button(
-                  "🗑️ Elimina", key=f"del_{idx}", use_container_width=True
-              ):
-                if not conferma_eliminazione_prodotto:
-                  str_lit.warning("Per eliminare il prodotto devi prima spuntare la conferma.")
-                else:
-                  # Rimuovi da Supabase solo dopo conferma esplicita.
+              with str_lit.popover("🗑️ Elimina", use_container_width=True):
+                str_lit.warning("Questa operazione è definitiva e non può essere annullata.")
+                if str_lit.button(
+                    "Conferma eliminazione",
+                    key=f"conferma_elimina_prodotto_{idx}",
+                    type="primary",
+                    use_container_width=True,
+                ):
                   try:
                     if p.get("id"):
                       supabase.table("prodotti_noleggio").delete().eq("id", p.get("id")).execute()
@@ -1796,16 +1809,9 @@ else:
                         "dati_b64": base64.b64encode(file_bytes).decode("utf-8"),
                     })
 
-                    nota_esistente = ev_target.get("note_tutti", "")
-                    testo_aggiunta = (
-                        f"\n[LISTA ATTREZZATURE INOLTRATA]: Aggiunta nuova lista attrezzature ({nome_file_allegato}) con "
-                        f"{len(str_lit.session_state.lista_attrezzature_corrente)} articoli."
-                    )
-                    ev_target["note_tutti"] = (
-                        nota_esistente + testo_aggiunta
-                    ).strip()
-
-                    salva_dati_esterni()
+                    # Il PDF resta esclusivamente nell’elenco allegati.
+                    # Il testo delle Note per tutti non viene modificato.
+                    salva_evento_singolo(ev_target)
                     str_lit.toast(f"✅ Lista attrezzature inoltrata all'evento '{ev_target.get('nome_evento')}'!")
                     str_lit.session_state.lista_attrezzature_corrente = []
                     str_lit.rerun()
