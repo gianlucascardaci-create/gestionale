@@ -26,8 +26,12 @@ str_lit.set_page_config(
 # ==============================================================================
 # CONFIGURAZIONE SUPABASE
 # ==============================================================================
-SUPABASE_URL = str_lit.secrets.get("SUPABASE_URL", "https://sqmualbhrkjgofoiqkfi.supabase.co")
-SUPABASE_KEY = str_lit.secrets.get("SUPABASE_KEY", "sb_publishable_PLcXb-rZPQjTdNmggOYxLg_PWLyUGxc")
+try:
+    SUPABASE_URL = str_lit.secrets["SUPABASE_URL"]
+    SUPABASE_KEY = str_lit.secrets["SUPABASE_KEY"]
+except Exception:
+    str_lit.error("Configurare SUPABASE_URL e SUPABASE_KEY nei Secrets di Streamlit.")
+    str_lit.stop()
 BUCKET_IMMAGINI = "immagini_prodotti"
 
 @str_lit.cache_resource
@@ -156,18 +160,25 @@ LISTA_RUOLI_DISPONIBILI = [
 
 def carica_dati_esterni():
   try:
-    res_prod = supabase.table("prodotti_noleggio").select("*").execute()
-    prodotti = res_prod.data if res_prod.data else []
+    # Vengono richiesti solo i campi necessari; gli allegati restano nel DB
+    # ma non vengono caricati nella pagina del magazzino.
+    res_prod = supabase.table("prodotti_noleggio").select(
+        "id,codice,nome,categoria,quantita,posizione,costo_noleggio,note,foto_path"
+    ).order("nome").execute()
+    prodotti = res_prod.data or []
 
-    res_ev = supabase.table("eventi_catering").select("*").execute()
-    eventi = res_ev.data if res_ev.data else []
+    res_ev = supabase.table("eventi_catering").select("*").order("data").execute()
+    eventi = res_ev.data or []
 
-    res_usr = supabase.table("utenti_autorizzati").select("*").execute()
+    res_usr = supabase.table("utenti_autorizzati").select(
+        "id,username,password,ruolo,nome,email"
+    ).execute()
     utenti = {}
-    if res_usr.data:
-      for u in res_usr.data:
-        username = u.get("username")
+    for u in (res_usr.data or []):
+      username = u.get("username")
+      if username:
         utenti[username] = {
+            "id": u.get("id"),
             "password": u.get("password"),
             "ruolo": u.get("ruolo"),
             "nome": u.get("nome"),
@@ -181,49 +192,54 @@ def carica_dati_esterni():
     }
   except Exception as e:
     str_lit.error(f"Errore di caricamento dati da Supabase: {e}")
-    return None
+    return {"prodotti_noleggio": [], "eventi_catering": [], "utenti_autorizzati": None}
 
 
 def salva_dati_esterni():
   try:
-    # Salvataggio sicuro Prodotti (Evita la cancellazione totale della tabella)
+    # Gli aggiornamenti usano l'id del database. Non vengono eseguite
+    # SELECT aggiuntive per ogni prodotto.
     for p in str_lit.session_state.prodotti_noleggio:
-      p_to_save = {k: v for k, v in p.items() if k != "id"}
-      codice_p = p.get("codice")
-      if codice_p:
-        existing = supabase.table("prodotti_noleggio").select("id").eq("codice", codice_p).execute()
-        if existing.data:
-          supabase.table("prodotti_noleggio").update(p_to_save).eq("codice", codice_p).execute()
-        else:
-          supabase.table("prodotti_noleggio").insert(p_to_save).execute()
-
-    # Salvataggio sicuro Eventi
-    for ev in str_lit.session_state.eventi_catering:
-      ev_to_save = {k: v for k, v in ev.items() if k != "id"}
-      nome_ev = ev.get("nome_evento")
-      data_ev = ev.get("data")
-      if nome_ev:
-        existing_ev = supabase.table("eventi_catering").select("id").eq("nome_evento", nome_ev).eq("data", data_ev).execute()
-        if existing_ev.data:
-          supabase.table("eventi_catering").update(ev_to_save).eq("nome_evento", nome_ev).eq("data", data_ev).execute()
-        else:
-          supabase.table("eventi_catering").insert(ev_to_save).execute()
-
-    # Salvataggio sicuro Utenti
-    for usr_k, usr_v in str_lit.session_state.utenti_autorizzati.items():
-      u_data = {
-          "username": usr_k,
-          "password": usr_v.get("password"),
-          "ruolo": usr_v.get("ruolo"),
-          "nome": usr_v.get("nome"),
-          "email": usr_v.get("email"),
-      }
-      existing_u = supabase.table("utenti_autorizzati").select("id").eq("username", usr_k).execute()
-      if existing_u.data:
-        supabase.table("utenti_autorizzati").update(u_data).eq("username", usr_k).execute()
+      payload = {k: p.get(k) for k in (
+          "codice", "nome", "categoria", "quantita", "posizione",
+          "costo_noleggio", "note", "foto_path")}
+      payload = {k: v for k, v in payload.items() if v is not None}
+      if p.get("id"):
+        res = supabase.table("prodotti_noleggio").update(payload).eq("id", p["id"]).execute()
       else:
-        supabase.table("utenti_autorizzati").insert(u_data).execute()
+        res = supabase.table("prodotti_noleggio").insert(payload).execute()
+        if res.data:
+          p["id"] = res.data[0].get("id")
+      if not res.data and p.get("id"):
+        raise RuntimeError(f"Prodotto non salvato: {p.get('nome', '')}")
 
+    for ev in str_lit.session_state.eventi_catering:
+      payload = {k: ev.get(k) for k in (
+          "nome_evento", "data", "data_display", "location", "ospiti",
+          "bambini", "staff", "note_tutti", "allegati_tutti", "note_sala",
+          "allegati_sala", "note_cucina", "allegati_cucina",
+          "note_magazzino", "allegati_magazzino")}
+      payload = {k: v for k, v in payload.items() if v is not None}
+      if ev.get("id"):
+        res = supabase.table("eventi_catering").update(payload).eq("id", ev["id"]).execute()
+      else:
+        res = supabase.table("eventi_catering").insert(payload).execute()
+        if res.data:
+          ev["id"] = res.data[0].get("id")
+      if not res.data and ev.get("id"):
+        raise RuntimeError(f"Evento non salvato: {ev.get('nome_evento', '')}")
+
+    for usr_k, usr_v in str_lit.session_state.utenti_autorizzati.items():
+      payload = {"username": usr_k, "password": usr_v.get("password"),
+                 "ruolo": usr_v.get("ruolo"), "nome": usr_v.get("nome"),
+                 "email": usr_v.get("email")}
+      existing = supabase.table("utenti_autorizzati").select("id").eq("username", usr_k).execute()
+      if existing.data:
+        res = supabase.table("utenti_autorizzati").update(payload).eq("username", usr_k).execute()
+      else:
+        res = supabase.table("utenti_autorizzati").insert(payload).execute()
+      if not res.data and not existing.data:
+        raise RuntimeError(f"Utente non salvato: {usr_k}")
   except Exception as e:
     str_lit.error(f"Errore durante il salvataggio su Supabase: {e}")
 
@@ -583,7 +599,8 @@ def modale_gestione_prodotto():
       )
 
       nuovo_item = {
-          "codice": f_codice,
+          "id": p_edit.get("id"),
+          "codice": f_codice.strip(),
           "nome": f_nome,
           "categoria": f_categoria,
           "quantita": f_qta,
@@ -842,7 +859,10 @@ def modale_modifica_evento(idx_ev):
     if btn_elim_ev:
       # Elimina anche da Supabase
       try:
-        supabase.table("eventi_catering").delete().eq("nome_evento", ev_mod.get("nome_evento")).eq("data", ev_mod.get("data")).execute()
+        if ev_mod.get("id"):
+          supabase.table("eventi_catering").delete().eq("id", ev_mod.get("id")).execute()
+        else:
+          supabase.table("eventi_catering").delete().eq("nome_evento", ev_mod.get("nome_evento")).eq("data", ev_mod.get("data")).execute()
       except:
         pass
       str_lit.session_state.eventi_catering.pop(idx_ev)
@@ -1159,7 +1179,16 @@ else:
         if match_cat and match_text:
           prodotti_filtrati.append((idx, p))
 
-      for idx, p in prodotti_filtrati:
+      page_size = 50
+      total_pages = max(1, (len(prodotti_filtrati) + page_size - 1) // page_size)
+      page_num = str_lit.number_input(
+          f"Pagina catalogo (1-{total_pages})", min_value=1,
+          max_value=total_pages, value=1, step=1,
+          key="pagina_catalogo_magazzino")
+      start_page = (int(page_num) - 1) * page_size
+      prodotti_da_mostrare = prodotti_filtrati[start_page:start_page + page_size]
+
+      for idx, p in prodotti_da_mostrare:
         with str_lit.container(border=True):
           if is_admin:
             col_img, col_info, col_qr, col_azioni = str_lit.columns(
@@ -1244,7 +1273,10 @@ else:
               ):
                 # Rimuovi da Supabase
                 try:
-                  supabase.table("prodotti_noleggio").delete().eq("codice", p.get("codice")).execute()
+                  if p.get("id"):
+                    supabase.table("prodotti_noleggio").delete().eq("id", p.get("id")).execute()
+                  else:
+                    supabase.table("prodotti_noleggio").delete().eq("codice", p.get("codice")).execute()
                 except:
                   pass
                 str_lit.session_state.prodotti_noleggio.pop(idx)
