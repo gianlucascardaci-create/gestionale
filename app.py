@@ -1141,9 +1141,9 @@ else:
               str_lit.markdown(
                   f'<div style="height: 100px; display: flex; align-items:'
                   ' center; justify-content: center; margin-bottom:'
-                  f' 15px;"><img src="data:image/png;base64,{logo_catering_b64}"'
-                  ' style="max-height: 100%; max-width: 100%; object-fit:'
-                  ' contain;"></div>',
+                  f' 15px; overflow:visible;"><img src="data:image/png;base64,{logo_catering_b64}"'
+                  ' style="height: 150px; width: 100%; object-fit: contain;'
+                  ' transform: scale(1.10);"></div>',
                   unsafe_allow_html=True,
               )
             else:
@@ -1390,9 +1390,21 @@ else:
               )
               str_lit.markdown("---")
 
+              # Le Note per tutti e i relativi allegati sono disponibili per ogni ruolo.
+              str_lit.markdown("**Note per tutti:**")
+              str_lit.info(ev.get("note_tutti") or "Nessuna nota.")
+              if ev.get("allegati_tutti"):
+                str_lit.markdown("📎 **Allegati Note per Tutti:**")
+                for att in ev.get("allegati_tutti"):
+                  str_lit.download_button(
+                      f"📥 Scarica allegato: {att['nome_file']}",
+                      data=base64.b64decode(att["dati_b64"]),
+                      file_name=att["nome_file"],
+                      key=f"dl_tutti_all_{idx_ev}_{att['nome_file']}",
+                  )
+
               if is_cucina:
-                str_lit.markdown("**Note per tutti:**")
-                str_lit.info(ev.get("note_tutti") or "Nessuna nota.")
+
                 str_lit.markdown("**Note per la cucina:**")
                 str_lit.success(ev.get("note_cucina") or "Nessuna nota.")
                 if ev.get("allegati_cucina"):
@@ -1404,8 +1416,6 @@ else:
                         key=f"dl_cucina_c_{idx_ev}_{att['nome_file']}",
                     )
               elif is_sala:
-                str_lit.markdown("**Note per tutti:**")
-                str_lit.info(ev.get("note_tutti") or "Nessuna nota.")
                 str_lit.markdown("**Note per la sala:**")
                 str_lit.success(ev.get("note_sala") or "Nessuna nota.")
                 if ev.get("allegati_sala"):
@@ -1417,8 +1427,6 @@ else:
                         key=f"dl_sala_s_{idx_ev}_{att['nome_file']}",
                     )
               elif is_magazzino or is_magazzino2:
-                str_lit.markdown("**Note per tutti:**")
-                str_lit.info(ev.get("note_tutti") or "Nessuna nota.")
                 str_lit.markdown("**Note per il magazzino:**")
                 str_lit.success(ev.get("note_magazzino") or "Nessuna nota.")
                 if ev.get("allegati_magazzino"):
@@ -1430,23 +1438,12 @@ else:
                         key=f"dl_mag_{idx_ev}_{att['nome_file']}",
                     )
               else:
-                str_lit.markdown("**Note per tutti:**")
-                str_lit.info(ev.get("note_tutti") or "Nessuna nota.")
                 str_lit.markdown("**Note per la sala:**")
                 str_lit.write(ev.get("note_sala") or "Nessuna nota.")
                 str_lit.markdown("**Note per la cucina:**")
                 str_lit.write(ev.get("note_cucina") or "Nessuna nota.")
                 str_lit.markdown("**Note per il magazzino:**")
                 str_lit.write(ev.get("note_magazzino") or "Nessuna nota.")
-                if ev.get("allegati_tutti"):
-                  str_lit.markdown("📎 **Allegati Note per Tutti:**")
-                  for att in ev.get("allegati_tutti"):
-                    str_lit.download_button(
-                        f"📥 Scarica allegato: {att['nome_file']}",
-                        data=base64.b64decode(att["dati_b64"]),
-                        file_name=att["nome_file"],
-                        key=f"dl_tutti_gen_{idx_ev}_{att['nome_file']}",
-                    )
 
     elif str_lit.session_state.area_selezionata == "opzione_3":
       if is_admin:
