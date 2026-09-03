@@ -1,4 +1,8 @@
-streamlit
-qrcode
-reportlab
-supabase
+streamlit>=1.40
+supabase>=2.0
+requests>=2.31
+reportlab>=4.0
+qrcode[pil]>=7.4
+Pillow>=10.0
+opencv-python-headless>=4.10
+numpy>=1.26
