@@ -168,8 +168,8 @@ def carica_dati_esterni():
     ).order("nome").execute()
     prodotti = res_prod.data or []
 
-    res_ev = supabase.table("eventi_catering").select("*").order("data").execute()
-    eventi = res_ev.data or []
+    # Gli eventi vengono caricati solo entrando nella sezione Catering o Liste.
+    eventi = []
 
     res_usr = supabase.table("utenti_autorizzati").select(
         "id,username,password,ruolo,nome,email"
@@ -194,6 +194,16 @@ def carica_dati_esterni():
   except Exception as e:
     str_lit.error(f"Errore di caricamento dati da Supabase: {e}")
     return {"prodotti_noleggio": [], "eventi_catering": [], "utenti_autorizzati": None}
+
+
+@str_lit.cache_data(ttl=30, show_spinner=False)
+def carica_eventi_solo_quando_servono():
+  """Carica gli eventi solo quando viene aperta una sezione che li usa."""
+  try:
+    return supabase.table("eventi_catering").select("*").order("data").execute().data or []
+  except Exception as e:
+    str_lit.error(f"Errore di caricamento eventi da Supabase: {e}")
+    return []
 
 
 def salva_dati_esterni():
@@ -530,6 +540,8 @@ if "eventi_catering" not in str_lit.session_state:
     str_lit.session_state.eventi_catering = dati_salvati["eventi_catering"]
   else:
     str_lit.session_state.eventi_catering = []
+if "eventi_caricati" not in str_lit.session_state:
+  str_lit.session_state.eventi_caricati = False
 
 if "lista_attrezzature_corrente" not in str_lit.session_state:
   str_lit.session_state.lista_attrezzature_corrente = []
@@ -1298,6 +1310,9 @@ else:
               str_lit.markdown("</div>", unsafe_allow_html=True)
 
     elif str_lit.session_state.area_selezionata == "opzione_2":
+      if not str_lit.session_state.eventi_caricati:
+        str_lit.session_state.eventi_catering = carica_eventi_solo_quando_servono()
+        str_lit.session_state.eventi_caricati = True
       str_lit.subheader("🍽️ Gestione Eventi & Catering")
 
       if puoi_gestire_eventi:
@@ -1495,6 +1510,9 @@ else:
                 str_lit.caption("Admin principale protetto")
 
     elif str_lit.session_state.area_selezionata == "opzione_4":
+      if not str_lit.session_state.eventi_caricati:
+        str_lit.session_state.eventi_catering = carica_eventi_solo_quando_servono()
+        str_lit.session_state.eventi_caricati = True
       if not is_admin:
         str_lit.error("Accesso non autorizzato.")
       else:
