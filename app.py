@@ -1437,42 +1437,37 @@ else:
               )
               str_lit.markdown("---")
 
-              # Le Note per tutti e i relativi allegati sono disponibili per ogni ruolo.
-              str_lit.markdown("**Note per tutti:**")
-              str_lit.info(ev.get("note_tutti") or "Nessuna nota.")
-              if ev.get("allegati_tutti"):
-                str_lit.markdown("📎 **Allegati Note per Tutti:**")
-                for att in ev.get("allegati_tutti"):
-                  str_lit.download_button(
-                      f"📥 Scarica allegato: {att['nome_file']}",
-                      data=base64.b64decode(att["dati_b64"]),
-                      file_name=att["nome_file"],
-                      key=f"dl_tutti_all_{idx_ev}_{att['nome_file']}",
-                  )
+              def mostra_sezione_note(titolo, testo, allegati, funzione_colore, prefisso):
+                str_lit.markdown(f"**{titolo}:**")
+                getattr(str_lit, funzione_colore)(testo or "Nessuna nota.")
+                if allegati:
+                  str_lit.markdown(f"📎 **Allegati {titolo.replace('Note per ', '')}:**")
+                  for att in allegati:
+                    str_lit.download_button(
+                        f"📥 Scarica allegato: {att['nome_file']}",
+                        data=base64.b64decode(att["dati_b64"]),
+                        file_name=att["nome_file"],
+                        key=f"dl_{prefisso}_{idx_ev}_{att['nome_file']}",
+                    )
+
+              mostra_sezione_note(
+                  "Note per tutti", ev.get("note_tutti"),
+                  ev.get("allegati_tutti") or [], "info", "tutti"
+              )
 
               if is_admin or is_wedding:
-                str_lit.markdown("**Note per la sala:**")
-                str_lit.warning(ev.get("note_sala") or "Nessuna nota.")
-                str_lit.markdown("**Note per la cucina:**")
-                str_lit.success(ev.get("note_cucina") or "Nessuna nota.")
-                str_lit.markdown("**Note per il magazzino:**")
-                str_lit.error(ev.get("note_magazzino") or "Nessuna nota.")
-
-                for chiave, etichetta, prefisso in ((
-                    ("allegati_sala", "Allegati Sala", "all_sala"),
-                    ("allegati_cucina", "Allegati Cucina", "all_cucina"),
-                    ("allegati_magazzino", "Allegati Magazzino", "all_mag"),
-                )):
-                  allegati_reparto = ev.get(chiave) or []
-                  if allegati_reparto:
-                    str_lit.markdown(f"📎 **{etichetta}:**")
-                    for att in allegati_reparto:
-                      str_lit.download_button(
-                          f"📥 Scarica allegato: {att['nome_file']}",
-                          data=base64.b64decode(att["dati_b64"]),
-                          file_name=att["nome_file"],
-                          key=f"dl_{prefisso}_{idx_ev}_{att['nome_file']}",
-                      )
+                mostra_sezione_note(
+                    "Note per la sala", ev.get("note_sala"),
+                    ev.get("allegati_sala") or [], "warning", "sala_all"
+                )
+                mostra_sezione_note(
+                    "Note per la cucina", ev.get("note_cucina"),
+                    ev.get("allegati_cucina") or [], "success", "cucina_all"
+                )
+                mostra_sezione_note(
+                    "Note per il magazzino", ev.get("note_magazzino"),
+                    ev.get("allegati_magazzino") or [], "error", "mag_all"
+                )
               elif is_cucina:
                 str_lit.markdown("**Note per la cucina:**")
                 str_lit.success(ev.get("note_cucina") or "Nessuna nota.")
