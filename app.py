@@ -9,6 +9,11 @@ import qrcode
 import streamlit as str_lit
 from supabase import create_client, Client
 import requests
+try:
+  import cv2
+  QR_SCANNER_DISPONIBILE = True
+except ImportError:
+  QR_SCANNER_DISPONIBILE = False
 
 try:
   from reportlab.lib import colors
@@ -383,6 +388,32 @@ def genera_qrcode_img(testo):
   buffer = BytesIO()
   img.save(buffer, format="PNG")
   return buffer.getvalue()
+
+
+def decodifica_qr_da_bytes(file_bytes):
+  """Legge il testo da un QR fotografato con la fotocamera del telefono."""
+  if not QR_SCANNER_DISPONIBILE:
+    return None
+  try:
+    import numpy as np
+    immagine = cv2.imdecode(np.frombuffer(file_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if immagine is None:
+      return None
+    decoder = cv2.QRCodeDetector()
+    testo, punti, _ = decoder.detectAndDecode(immagine)
+    return testo.strip() if testo else None
+  except Exception:
+    return None
+
+
+def estrai_codice_da_qr(testo):
+  """Accetta sia il vecchio URL con ?codice= sia il solo codice prodotto."""
+  if not testo:
+    return None
+  testo = str(testo).strip()
+  if "codice=" in testo:
+    testo = testo.split("codice=", 1)[1].split("&", 1)[0]
+  return testo.strip() or None
 
 
 def parse_data_evento(d_str):
@@ -1033,7 +1064,7 @@ else:
     )
 
     if is_admin:
-      c1, c2, c3, c4 = str_lit.columns(4)
+      c1, c2, c3, c4, c5 = str_lit.columns(5)
       with c1:
         with str_lit.container(border=True):
           if logo_noleggio_b64:
@@ -1144,6 +1175,27 @@ else:
             str_lit.session_state.area_selezionata = "opzione_3"
             str_lit.rerun()
             str_lit.stop()
+
+      with c5:
+        with str_lit.container(border=True):
+          str_lit.markdown(
+              "<div style='height: 100px; display: flex; align-items: center;"
+              " justify-content: center; font-size: 3rem; margin-bottom:"
+              " 15px;'>📷</div>",
+              unsafe_allow_html=True,
+          )
+          str_lit.markdown("### Scansiona QR code")
+          str_lit.markdown(
+              "<div class='card-desc'>Apri subito la scheda di un prodotto.</div>",
+              unsafe_allow_html=True,
+          )
+          if str_lit.button(
+              "Apri Scanner QR", use_container_width=True, type="primary",
+              key="btn_h_scanner_admin",
+          ):
+            str_lit.session_state.area_selezionata = "opzione_5"
+            str_lit.rerun()
+            str_lit.stop()
     else:
       c1, c2, c3 = str_lit.columns(3)
       with c1:
@@ -1208,7 +1260,26 @@ else:
               str_lit.rerun()
               str_lit.stop()
       with c3:
-        pass
+        if is_magazzino:
+          with str_lit.container(border=True):
+            str_lit.markdown(
+                "<div style='height: 100px; display: flex; align-items: center;"
+                " justify-content: center; font-size: 3rem; margin-bottom:"
+                " 15px;'>📷</div>",
+                unsafe_allow_html=True,
+            )
+            str_lit.markdown("### Scansiona QR code")
+            str_lit.markdown(
+                "<div class='card-desc'>Apri la scheda senza visualizzare il prezzo.</div>",
+                unsafe_allow_html=True,
+            )
+            if str_lit.button(
+                "Apri Scanner QR", use_container_width=True, type="primary",
+                key="btn_h_scanner_magazzino",
+            ):
+              str_lit.session_state.area_selezionata = "opzione_5"
+              str_lit.rerun()
+              str_lit.stop()
 
   else:
     if str_lit.button("⬅️ Torna alla Home"):
@@ -1218,7 +1289,48 @@ else:
       str_lit.rerun()
       str_lit.stop()
 
-    if str_lit.session_state.area_selezionata == "opzione_1":
+    if str_lit.session_state.area_selezionata == "opzione_5":
+      if not (is_admin or is_magazzino):
+        str_lit.error("Accesso non autorizzato.")
+      else:
+        str_lit.subheader("📷 Scansiona QR code prodotto")
+        str_lit.write("Inquadra il QR con la fotocamera del telefono oppure carica una foto del QR.")
+        if not QR_SCANNER_DISPONIBILE:
+          str_lit.error("Scanner QR non disponibile: aggiungi opencv-python-headless ai requirements.")
+        foto_qr = str_lit.camera_input("Inquadra il QR code")
+        file_qr = foto_qr or str_lit.file_uploader(
+            "Oppure carica una foto del QR code", type=["png", "jpg", "jpeg"],
+            key="upload_qr_prodotto",
+        )
+        if file_qr:
+          codice_qr = codice_da_contenuto_qr(decodifica_qr_da_bytes(file_qr.getvalue()))
+          if not codice_qr:
+            str_lit.error("QR non riconosciuto. Inquadra il codice più da vicino e riprova.")
+          else:
+            prodotto_qr = next(
+                (p for p in str_lit.session_state.prodotti_noleggio
+                 if str(p.get("codice", "")).strip() == codice_qr),
+                None,
+            )
+            if not prodotto_qr:
+              str_lit.warning(f"Nessun prodotto trovato con codice: {codice_qr}")
+            else:
+              str_lit.success(f"Prodotto trovato: {prodotto_qr.get('nome', 'N/D')}")
+              col_qr_img, col_qr_info = str_lit.columns([1, 2])
+              with col_qr_img:
+                if prodotto_qr.get("foto_path"):
+                  str_lit.image(prodotto_qr["foto_path"], use_container_width=True)
+              with col_qr_info:
+                str_lit.markdown(f"### {prodotto_qr.get('nome', 'N/D')}")
+                str_lit.write(f"**Codice:** {prodotto_qr.get('codice', '-')}")
+                str_lit.write(f"**Categoria:** {prodotto_qr.get('categoria', '-')}")
+                str_lit.write(f"**Quantità:** {prodotto_qr.get('quantita', 0)}")
+                str_lit.write(f"**Posizione:** {prodotto_qr.get('posizione', '-')}")
+                str_lit.write(f"**Note:** {prodotto_qr.get('note', '-')}")
+                if is_admin:
+                  str_lit.write(f"**Prezzo:** {prodotto_qr.get('costo_noleggio', 0)} €")
+
+    elif str_lit.session_state.area_selezionata == "opzione_1":
       
       str_lit.subheader("📦 Magazzino & Noleggio Attrezzature")
 
