@@ -158,7 +158,7 @@ LISTA_RUOLI_DISPONIBILI = [
 ]
 
 
-@str_lit.cache_data(ttl=30, show_spinner=False)
+@str_lit.cache_data(ttl=600, show_spinner=False)
 def carica_dati_esterni():
   try:
     # Vengono richiesti solo i campi necessari; gli allegati restano nel DB
@@ -196,7 +196,7 @@ def carica_dati_esterni():
     return {"prodotti_noleggio": [], "eventi_catering": [], "utenti_autorizzati": None}
 
 
-@str_lit.cache_data(ttl=30, show_spinner=False)
+@str_lit.cache_data(ttl=600, show_spinner=False)
 def carica_eventi_solo_quando_servono():
   """Carica gli eventi solo quando viene aperta una sezione che li usa."""
   try:
@@ -274,7 +274,8 @@ def salva_evento_singolo(ev):
         ev["id"] = res.data[0].get("id")
     if not res.data:
       raise RuntimeError("Evento non salvato")
-    carica_dati_esterni.clear()
+    # Non invalidiamo il caricamento completo dei prodotti: dopo un salvataggio
+    # evento la pagina deve restare rapida e i dati sono già aggiornati in sessione.
     carica_eventi_solo_quando_servono.clear()
     return True
   except Exception as e:
@@ -771,6 +772,28 @@ def modale_modifica_evento(idx_ev):
 
   ev_mod = str_lit.session_state.eventi_catering[idx_ev]
 
+  if str_lit.session_state.get(f"eliminazione_evento_in_attesa_{idx_ev}", False):
+    str_lit.warning("Conferma eliminazione: questa operazione è definitiva e non può essere annullata.")
+    col_conf1, col_conf2 = str_lit.columns(2)
+    with col_conf1:
+      if str_lit.button("Conferma eliminazione", key=f"conferma_evento_{idx_ev}", type="primary", use_container_width=True):
+        try:
+          if ev_mod.get("id"):
+            supabase.table("eventi_catering").delete().eq("id", ev_mod.get("id")).execute()
+          else:
+            supabase.table("eventi_catering").delete().eq("nome_evento", ev_mod.get("nome_evento")).eq("data", ev_mod.get("data")).execute()
+        except:
+          pass
+        str_lit.session_state.eventi_catering.pop(idx_ev)
+        str_lit.session_state[f"eliminazione_evento_in_attesa_{idx_ev}"] = False
+        str_lit.toast("🗑️ Evento eliminato con successo!")
+        str_lit.rerun()
+    with col_conf2:
+      if str_lit.button("Annulla", key=f"annulla_evento_{idx_ev}", use_container_width=True):
+        str_lit.session_state[f"eliminazione_evento_in_attesa_{idx_ev}"] = False
+        str_lit.rerun()
+    str_lit.stop()
+
   with str_lit.form(f"form_mod_ev_dialog_{idx_ev}"):
     m_nome = str_lit.text_input(
         "Nome Evento / Cliente", value=ev_mod.get("nome_evento", "")
@@ -848,27 +871,15 @@ def modale_modifica_evento(idx_ev):
         "Note per il magazzino", "note_magazzino", "allegati_magazzino"
     )
 
-    with str_lit.form(key=f"form_azioni_evento_{idx_ev}"):
+    col_btn_mod1, col_btn_mod2 = str_lit.columns(2)
+    with col_btn_mod1:
       btn_salva_ev = str_lit.form_submit_button(
           "💾 Salva Modifiche", type="primary", use_container_width=True
       )
-
-    with str_lit.popover("🗑️ Elimina Evento", use_container_width=True):
-      str_lit.warning("Questa operazione è definitiva e non può essere annullata.")
-      if str_lit.button(
-          "Conferma eliminazione", key=f"conferma_elimina_evento_{idx_ev}",
-          type="primary", use_container_width=True,
-      ):
-        try:
-          if ev_mod.get("id"):
-            supabase.table("eventi_catering").delete().eq("id", ev_mod.get("id")).execute()
-          else:
-            supabase.table("eventi_catering").delete().eq("nome_evento", ev_mod.get("nome_evento")).eq("data", ev_mod.get("data")).execute()
-        except:
-          pass
-        str_lit.session_state.eventi_catering.pop(idx_ev)
-        str_lit.toast("🗑️ Evento eliminato con successo!")
-        str_lit.rerun()
+    with col_btn_mod2:
+      btn_elim_ev = str_lit.form_submit_button(
+          "🗑️ Elimina Evento", use_container_width=True
+      )
 
     if btn_salva_ev:
 
@@ -918,6 +929,9 @@ def modale_modifica_evento(idx_ev):
       str_lit.toast("✅ Modifiche salvate con successo!")
       str_lit.rerun()
 
+    if btn_elim_ev:
+      str_lit.session_state[f"eliminazione_evento_in_attesa_{idx_ev}"] = True
+      str_lit.rerun()
 
 
 if str_lit.session_state.utente_loggato is None:
