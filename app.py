@@ -823,6 +823,11 @@ def modale_modifica_evento(idx_ev):
         "Note per il magazzino", "note_magazzino", "allegati_magazzino"
     )
 
+    conferma_eliminazione_evento = str_lit.checkbox(
+        "Confermo di voler eliminare definitivamente questo evento",
+        key=f"conferma_elimina_evento_{idx_ev}",
+    )
+
     col_btn_mod1, col_btn_mod2 = str_lit.columns(2)
     with col_btn_mod1:
       btn_salva_ev = str_lit.form_submit_button(
@@ -882,18 +887,21 @@ def modale_modifica_evento(idx_ev):
       str_lit.rerun()
 
     if btn_elim_ev:
-      # Elimina anche da Supabase
-      try:
-        if ev_mod.get("id"):
-          supabase.table("eventi_catering").delete().eq("id", ev_mod.get("id")).execute()
-        else:
-          supabase.table("eventi_catering").delete().eq("nome_evento", ev_mod.get("nome_evento")).eq("data", ev_mod.get("data")).execute()
-      except:
-        pass
-      str_lit.session_state.eventi_catering.pop(idx_ev)
-      salva_dati_esterni()
-      str_lit.toast("🗑️ Evento eliminato con successo!")
-      str_lit.rerun()
+      if not conferma_eliminazione_evento:
+        str_lit.warning("Per eliminare l’evento devi prima spuntare la conferma.")
+      else:
+        # Elimina anche da Supabase solo dopo conferma esplicita.
+        try:
+          if ev_mod.get("id"):
+            supabase.table("eventi_catering").delete().eq("id", ev_mod.get("id")).execute()
+          else:
+            supabase.table("eventi_catering").delete().eq("nome_evento", ev_mod.get("nome_evento")).eq("data", ev_mod.get("data")).execute()
+        except:
+          pass
+        str_lit.session_state.eventi_catering.pop(idx_ev)
+        salva_dati_esterni()
+        str_lit.toast("🗑️ Evento eliminato con successo!")
+        str_lit.rerun()
 
 
 if str_lit.session_state.utente_loggato is None:
@@ -960,6 +968,10 @@ else:
   is_magazzino2 = ruolo_utente == "Magazzino2"
 
   puoi_gestire_eventi = is_admin or is_wedding
+
+  # Magazzino2 ha gli stessi permessi del Magazzino, ma non può aprire Catering.
+  if is_magazzino2 and str_lit.session_state.area_selezionata == "opzione_2":
+    str_lit.session_state.area_selezionata = None
 
   col_top1, col_top2 = str_lit.columns([8, 1])
   with col_top2:
@@ -1135,7 +1147,7 @@ else:
               str_lit.stop()
 
       with c2:
-        if is_wedding or is_cucina or is_sala or is_magazzino or is_magazzino2:
+        if is_wedding or is_cucina or is_sala or is_magazzino:
           with str_lit.container(border=True):
             if logo_catering_b64:
               str_lit.markdown(
@@ -1306,20 +1318,27 @@ else:
                 str_lit.session_state.prodotti_noleggio.append(nuovo_p)
                 salva_dati_esterni()
                 str_lit.rerun()
+              conferma_eliminazione_prodotto = str_lit.checkbox(
+                  "Confermo eliminazione",
+                  key=f"conferma_elimina_prodotto_{idx}",
+              )
               if str_lit.button(
                   "🗑️ Elimina", key=f"del_{idx}", use_container_width=True
               ):
-                # Rimuovi da Supabase
-                try:
-                  if p.get("id"):
-                    supabase.table("prodotti_noleggio").delete().eq("id", p.get("id")).execute()
-                  else:
-                    supabase.table("prodotti_noleggio").delete().eq("codice", p.get("codice")).execute()
-                except:
-                  pass
-                str_lit.session_state.prodotti_noleggio.pop(idx)
-                salva_dati_esterni()
-                str_lit.rerun()
+                if not conferma_eliminazione_prodotto:
+                  str_lit.warning("Per eliminare il prodotto devi prima spuntare la conferma.")
+                else:
+                  # Rimuovi da Supabase solo dopo conferma esplicita.
+                  try:
+                    if p.get("id"):
+                      supabase.table("prodotti_noleggio").delete().eq("id", p.get("id")).execute()
+                    else:
+                      supabase.table("prodotti_noleggio").delete().eq("codice", p.get("codice")).execute()
+                  except:
+                    pass
+                  str_lit.session_state.prodotti_noleggio.pop(idx)
+                  salva_dati_esterni()
+                  str_lit.rerun()
               str_lit.markdown("</div>", unsafe_allow_html=True)
 
     elif str_lit.session_state.area_selezionata == "opzione_2":
@@ -1437,13 +1456,30 @@ else:
                         file_name=att["nome_file"],
                         key=f"dl_mag_{idx_ev}_{att['nome_file']}",
                     )
-              else:
+              elif is_wedding:
                 str_lit.markdown("**Note per la sala:**")
-                str_lit.write(ev.get("note_sala") or "Nessuna nota.")
+                str_lit.warning(ev.get("note_sala") or "Nessuna nota.")
                 str_lit.markdown("**Note per la cucina:**")
-                str_lit.write(ev.get("note_cucina") or "Nessuna nota.")
+                str_lit.success(ev.get("note_cucina") or "Nessuna nota.")
                 str_lit.markdown("**Note per il magazzino:**")
-                str_lit.write(ev.get("note_magazzino") or "Nessuna nota.")
+                str_lit.error(ev.get("note_magazzino") or "Nessuna nota.")
+
+                # La Wedding può consultare anche gli allegati dei singoli reparti.
+                for chiave, etichetta, prefisso in (
+                    ("allegati_sala", "Allegati Sala", "w_sala"),
+                    ("allegati_cucina", "Allegati Cucina", "w_cucina"),
+                    ("allegati_magazzino", "Allegati Magazzino", "w_mag"),
+                ):
+                  allegati_reparto = ev.get(chiave) or []
+                  if allegati_reparto:
+                    str_lit.markdown(f"📎 **{etichetta}:**")
+                    for att in allegati_reparto:
+                      str_lit.download_button(
+                          f"📥 Scarica allegato: {att['nome_file']}",
+                          data=base64.b64decode(att["dati_b64"]),
+                          file_name=att["nome_file"],
+                          key=f"dl_{prefisso}_{idx_ev}_{att['nome_file']}",
+                      )
 
     elif str_lit.session_state.area_selezionata == "opzione_3":
       if is_admin:
