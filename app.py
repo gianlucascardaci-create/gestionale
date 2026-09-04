@@ -1327,105 +1327,88 @@ else:
       start_page = (int(page_num) - 1) * page_size
       prodotti_da_mostrare = prodotti_filtrati[start_page:start_page + page_size]
 
-      for idx, p in prodotti_da_mostrare:
-        with str_lit.container(border=True):
-          if is_admin:
-            col_img, col_info, col_qr, col_azioni = str_lit.columns(
-                [1.2, 3.8, 1, 1.5]
-            )
-          else:
-            col_img, col_info, col_qr = str_lit.columns([1.2, 4.8, 1])
+      str_lit.markdown("""
+      <style>
+      .prodotto-griglia-titolo {font-size:0.92rem; font-weight:700; line-height:1.12; color:#1f2937; min-height:2.25em;}
+      .prodotto-griglia-riga {font-size:0.72rem; line-height:1.25; color:#374151; margin:2px 0;}
+      .prodotto-griglia-nota {font-size:0.68rem; line-height:1.2; color:#6b7280; min-height:2.2em;}
+      </style>
+      """, unsafe_allow_html=True)
 
-          with col_img:
-            str_lit.markdown(
-                html_thumb(p.get("foto_path"), size=110),
-                unsafe_allow_html=True,
-            )
-
-          with col_info:
-            str_lit.markdown(
-                f"<div style='font-size: 1.25rem; font-weight: bold;"
-                f" margin-bottom: 4px;'>{p.get('nome', 'Senza Nome')} &nbsp;<span"
-                " style='font-size: 0.9rem; color: #555; font-weight: normal;'>ID:"
-                f" `{p.get('codice', '-')}`</span></div>",
-                unsafe_allow_html=True,
-            )
-            str_lit.markdown(
-                f"<div style='font-size: 1.05rem; margin-bottom:"
-                f" 4px;'><b>📂 Categoria:</b> {p.get('categoria', 'N/D')}</div>",
-                unsafe_allow_html=True,
-            )
-
-            testo_prezzo = "" if is_magazzino else f" &nbsp;|&nbsp; <b>💶 Prezzo:</b> {p.get('costo_noleggio', 0)}€"
-
-            str_lit.markdown(
-                f"<div style='font-size: 1.05rem; margin-bottom: 4px;'>"
-                f"<b>📍 Posizione in magazzino:</b> {p.get('posizione', '-')}"
-                f" &nbsp;|&nbsp; <b>📦 Q.tà:</b> {p.get('quantita', 0)}"
-                f"{testo_prezzo}</div>",
-                unsafe_allow_html=True,
-            )
-            if p.get("note"):
+      # Griglia compatta: sette schede per riga su desktop.
+      for riga_start in range(0, len(prodotti_da_mostrare), 7):
+        blocco_prodotti = prodotti_da_mostrare[riga_start:riga_start + 7]
+        colonne_griglia = str_lit.columns(7, gap="small")
+        for posizione_colonna, (idx, p) in enumerate(blocco_prodotti):
+          with colonne_griglia[posizione_colonna]:
+            with str_lit.container(border=True):
               str_lit.markdown(
-                  f"<div style='font-size: 0.95rem; color: #666;'>📝"
-                  f" <i>Note: {p['note']}</i></div>",
+                  html_thumb(p.get("foto_path"), size=92),
                   unsafe_allow_html=True,
               )
-
-          with col_qr:
-            str_lit.markdown(
-                "<div style='display: flex; flex-direction: column;"
-                " align-items: center; justify-content: center; height:"
-                " 100%;'>",
-                unsafe_allow_html=True,
-            )
-            qr_bytes = genera_qrcode_img(
-                f"{BASE_URL}/?codice={quote(str(p.get('codice', '')))}"
-            )
-            str_lit.image(qr_bytes, width=95)
-            str_lit.markdown("</div>", unsafe_allow_html=True)
-
-          if is_admin:
-            with col_azioni:
               str_lit.markdown(
-                  "<div style='display: flex; flex-direction: column;"
-                  " justify-content: center; height: 100%; gap: 6px;'>",
+                  f"<div class='prodotto-griglia-titolo'>{p.get('nome', 'Senza Nome')}</div>",
                   unsafe_allow_html=True,
               )
-              if str_lit.button(
-                  "✏️ Modifica", key=f"edit_{idx}", use_container_width=True
-              ):
-                str_lit.session_state.modale_prodotto = "modifica"
-                str_lit.session_state.prodotto_in_modifica = p
-                str_lit.session_state.indice_modifica = idx
-                modale_gestione_prodotto()
-              if str_lit.button(
-                  "📄 Duplica", key=f"dup_{idx}", use_container_width=True
-              ):
-                nuovo_p = p.copy()
-                nuovo_p["codice"] = p.get("codice", "") + "-COPIA"
-                str_lit.session_state.prodotti_noleggio.append(nuovo_p)
-                salva_dati_esterni()
-                str_lit.rerun()
-              with str_lit.popover("🗑️ Elimina", use_container_width=True):
-                str_lit.warning("Questa operazione è definitiva e non può essere annullata.")
-                if str_lit.button(
-                    "Conferma eliminazione",
-                    key=f"conferma_elimina_prodotto_{idx}",
-                    type="primary",
-                    use_container_width=True,
-                ):
-                  try:
-                    if p.get("id"):
-                      supabase.table("prodotti_noleggio").delete().eq("id", p.get("id")).execute()
-                    else:
-                      supabase.table("prodotti_noleggio").delete().eq("codice", p.get("codice")).execute()
-                  except:
-                    pass
-                  str_lit.session_state.prodotti_noleggio.pop(idx)
-                  salva_dati_esterni()
-                  str_lit.rerun()
-              str_lit.markdown("</div>", unsafe_allow_html=True)
+              str_lit.markdown(
+                  f"<div class='prodotto-griglia-riga'><b>Codice:</b> {p.get('codice', '-')}</div>"
+                  f"<div class='prodotto-griglia-riga'><b>Cat.:</b> {p.get('categoria', 'N/D')}</div>"
+                  f"<div class='prodotto-griglia-riga'><b>Pos.:</b> {p.get('posizione', '-')}</div>"
+                  f"<div class='prodotto-griglia-riga'><b>Q.tà:</b> {p.get('quantita', 0)}</div>",
+                  unsafe_allow_html=True,
+              )
+              if not is_magazzino and p.get("costo_noleggio") is not None:
+                str_lit.markdown(
+                    f"<div class='prodotto-griglia-riga'><b>Prezzo:</b> {p.get('costo_noleggio', 0)}€</div>",
+                    unsafe_allow_html=True,
+                )
+              if p.get("note"):
+                str_lit.markdown(
+                    f"<div class='prodotto-griglia-nota'>📝 {p.get('note')}</div>",
+                    unsafe_allow_html=True,
+                )
+              else:
+                str_lit.markdown("<div class='prodotto-griglia-nota'></div>", unsafe_allow_html=True)
+
+              qr_bytes = genera_qrcode_img(
+                  f"{BASE_URL}/?codice={quote(str(p.get('codice', '')))}"
+              )
+              str_lit.image(qr_bytes, width=78)
+
+              if is_admin:
+                col_mod, col_dup, col_del = str_lit.columns(3)
+                with col_mod:
+                  if str_lit.button("✏️", key=f"edit_{idx}", help="Modifica", use_container_width=True):
+                    str_lit.session_state.modale_prodotto = "modifica"
+                    str_lit.session_state.prodotto_in_modifica = p
+                    str_lit.session_state.indice_modifica = idx
+                    modale_gestione_prodotto()
+                with col_dup:
+                  if str_lit.button("📄", key=f"dup_{idx}", help="Duplica", use_container_width=True):
+                    nuovo_p = p.copy()
+                    nuovo_p["codice"] = p.get("codice", "") + "-COPIA"
+                    nuovo_p.pop("id", None)
+                    str_lit.session_state.prodotti_noleggio.append(nuovo_p)
+                    salva_dati_esterni()
+                    str_lit.rerun()
+                with col_del:
+                  with str_lit.popover("🗑️", help="Elimina"):
+                    str_lit.warning("Eliminazione definitiva")
+                    if str_lit.button(
+                        "Conferma", key=f"conferma_elimina_prodotto_{idx}",
+                        type="primary", use_container_width=True,
+                    ):
+                      try:
+                        if p.get("id"):
+                          supabase.table("prodotti_noleggio").delete().eq("id", p.get("id")).execute()
+                        else:
+                          supabase.table("prodotti_noleggio").delete().eq("codice", p.get("codice")).execute()
+                      except:
+                        pass
+                      str_lit.session_state.prodotti_noleggio.pop(idx)
+                      salva_dati_esterni()
+                      str_lit.rerun()
+
 
     elif str_lit.session_state.area_selezionata == "opzione_2":
       if not str_lit.session_state.eventi_caricati:
