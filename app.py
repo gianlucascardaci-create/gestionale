@@ -1354,10 +1354,10 @@ else:
       </style>
       """, unsafe_allow_html=True)
 
-      # Griglia compatta e leggibile: cinque schede per riga su desktop.
-      for riga_start in range(0, len(prodotti_da_mostrare), 5):
-        blocco_prodotti = prodotti_da_mostrare[riga_start:riga_start + 5]
-        colonne_griglia = str_lit.columns(5, gap="small")
+      # Griglia compatta: sette schede per riga su desktop.
+      for riga_start in range(0, len(prodotti_da_mostrare), 7):
+        blocco_prodotti = prodotti_da_mostrare[riga_start:riga_start + 7]
+        colonne_griglia = str_lit.columns(7, gap="small")
         for posizione_colonna, (idx, p) in enumerate(blocco_prodotti):
           with colonne_griglia[posizione_colonna]:
             with str_lit.container(border=True):
