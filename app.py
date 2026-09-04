@@ -1329,21 +1329,22 @@ else:
 
       str_lit.markdown("""
       <style>
-      .prodotto-griglia-titolo {font-size:0.92rem; font-weight:700; line-height:1.12; color:#1f2937; min-height:2.25em;}
-      .prodotto-griglia-riga {font-size:0.72rem; line-height:1.25; color:#374151; margin:2px 0;}
-      .prodotto-griglia-nota {font-size:0.68rem; line-height:1.2; color:#6b7280; min-height:2.2em;}
+      .prodotto-griglia-titolo {font-size:1.08rem; font-weight:700; line-height:1.15; color:#1f2937; min-height:2.35em;}
+      .prodotto-griglia-riga {font-size:0.88rem; line-height:1.35; color:#374151; margin:4px 0;}
+      .prodotto-griglia-quantita {font-size:1.18rem; font-weight:800; color:#0056b3; background:#eaf3ff; border-radius:8px; padding:5px 8px; margin:6px 0; text-align:center;}
+      .prodotto-griglia-nota {font-size:0.82rem; line-height:1.3; color:#6b7280; min-height:2.4em;}
       </style>
       """, unsafe_allow_html=True)
 
-      # Griglia compatta: sette schede per riga su desktop.
-      for riga_start in range(0, len(prodotti_da_mostrare), 7):
-        blocco_prodotti = prodotti_da_mostrare[riga_start:riga_start + 7]
-        colonne_griglia = str_lit.columns(7, gap="small")
+      # Griglia compatta e leggibile: cinque schede per riga su desktop.
+      for riga_start in range(0, len(prodotti_da_mostrare), 5):
+        blocco_prodotti = prodotti_da_mostrare[riga_start:riga_start + 5]
+        colonne_griglia = str_lit.columns(5, gap="small")
         for posizione_colonna, (idx, p) in enumerate(blocco_prodotti):
           with colonne_griglia[posizione_colonna]:
             with str_lit.container(border=True):
               str_lit.markdown(
-                  html_thumb(p.get("foto_path"), size=92),
+                  html_thumb(p.get("foto_path"), size=108),
                   unsafe_allow_html=True,
               )
               str_lit.markdown(
@@ -1353,8 +1354,11 @@ else:
               str_lit.markdown(
                   f"<div class='prodotto-griglia-riga'><b>Codice:</b> {p.get('codice', '-')}</div>"
                   f"<div class='prodotto-griglia-riga'><b>Cat.:</b> {p.get('categoria', 'N/D')}</div>"
-                  f"<div class='prodotto-griglia-riga'><b>Pos.:</b> {p.get('posizione', '-')}</div>"
-                  f"<div class='prodotto-griglia-riga'><b>Q.tà:</b> {p.get('quantita', 0)}</div>",
+                  f"<div class='prodotto-griglia-riga'><b>Posizione:</b> {p.get('posizione', '-')}</div>",
+                  unsafe_allow_html=True,
+              )
+              str_lit.markdown(
+                  f"<div class='prodotto-griglia-quantita'>📦 Quantità: {p.get('quantita', 0)}</div>",
                   unsafe_allow_html=True,
               )
               if not is_magazzino and p.get("costo_noleggio") is not None:
@@ -1373,7 +1377,7 @@ else:
               qr_bytes = genera_qrcode_img(
                   f"{BASE_URL}/?codice={quote(str(p.get('codice', '')))}"
               )
-              str_lit.image(qr_bytes, width=78)
+              str_lit.image(qr_bytes, width=92)
 
               if is_admin:
                 col_mod, col_dup, col_del = str_lit.columns(3)
