@@ -668,6 +668,24 @@ def modale_gestione_prodotto():
   )
   str_lit.markdown(f"#### {testo_titolo_prodotto}")
 
+  if MODO == "modifica" and p_edit.get("codice"):
+    qr_modifica = genera_qrcode_img(
+        f"{BASE_URL}/?codice={quote(str(p_edit.get('codice', '')))}"
+    )
+    col_qr_mod1, col_qr_mod2 = str_lit.columns([1, 2])
+    with col_qr_mod1:
+      str_lit.image(qr_modifica, width=145)
+    with col_qr_mod2:
+      str_lit.markdown("**QR code del prodotto**")
+      str_lit.caption("Puoi scaricarlo e stamparlo per applicarlo fisicamente al prodotto.")
+      str_lit.download_button(
+          "⬇️ Scarica QR code",
+          data=qr_modifica,
+          file_name=f"QR_{p_edit.get('codice')}.png",
+          mime="image/png",
+          key=f"download_qr_modifica_{p_edit.get('id', p_edit.get('codice'))}",
+      )
+
   with str_lit.form("form_prodotto_dialog"):
     col_form1, col_form2 = str_lit.columns(2)
     with col_form1:
@@ -1373,11 +1391,6 @@ else:
                 )
               else:
                 str_lit.markdown("<div class='prodotto-griglia-nota'></div>", unsafe_allow_html=True)
-
-              qr_bytes = genera_qrcode_img(
-                  f"{BASE_URL}/?codice={quote(str(p.get('codice', '')))}"
-              )
-              str_lit.image(qr_bytes, width=92)
 
               if is_admin:
                 col_mod, col_dup, col_del = str_lit.columns(3)
