@@ -5,6 +5,8 @@ import json
 import os
 import socket
 import uuid
+import difflib
+import re
 import unicodedata
 import qrcode
 import streamlit as str_lit
@@ -238,6 +240,20 @@ def varianti_parola_italiana(parola):
   return varianti
 
 
+def parole_simili(parola_query, parola_testo):
+  if parola_query == parola_testo:
+    return True
+  if len(parola_query) < 4 or len(parola_testo) < 4:
+    return False
+  # Accetta una lettera finale mancante o aggiunta: JASMIN/JASMINE.
+  if abs(len(parola_query) - len(parola_testo)) <= 2:
+    if parola_query.startswith(parola_testo) or parola_testo.startswith(parola_query):
+      return True
+    if parola_query[:4] == parola_testo[:4]:
+      return True
+  return difflib.SequenceMatcher(None, parola_query, parola_testo).ratio() >= 0.78
+
+
 def ricerca_intelligente(query, campi):
   query_norm = normalizza_testo_ricerca(query)
   if not query_norm:
@@ -245,11 +261,16 @@ def ricerca_intelligente(query, campi):
   testo_norm = normalizza_testo_ricerca(" ".join(str(c or "") for c in campi))
   if query_norm in testo_norm:
     return True
+  parole_testo = re.findall(r"[a-z0-9]+", testo_norm)
   parole_query = query_norm.split()
-  return all(
-      any(variante in testo_norm for variante in varianti_parola_italiana(parola))
-      for parola in parole_query
-  )
+  for parola_query in parole_query:
+    varianti = varianti_parola_italiana(parola_query)
+    if not any(
+        any(parole_simili(variante, parola_testo) for parola_testo in parole_testo)
+        for variante in varianti
+    ):
+      return False
+  return True
 
 
 COLORI_CATEGORIE = {
