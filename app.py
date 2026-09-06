@@ -216,21 +216,6 @@ def testo_categorie(valore):
   return ", ".join(categorie) if categorie else "N/D"
 
 
-SOTTOCATEGORIE_PER_CATEGORIA = {
-    "PIATTI E SOTTOPIATTI": ["JASMIN", "OUVERTURE", "DECORE", "PANNA", "ROSENTHAL", "VERDE S", "VETRO", "SICILIANO", "ARGENTO"],
-    "POSATERIA": ["VELA", "MAIA", "ARGENTO", "ORO"],
-    "BICCHIERI": ["ACQUA", "VINO", "CARAFFE", "FLUTE", "VARIO", "ARGENTO"],
-}
-
-
-def sottocategorie_disponibili(categorie):
-  disponibili = []
-  for categoria in categorie_prodotto(categorie):
-    for sottocat in SOTTOCATEGORIE_PER_CATEGORIA.get(categoria, []):
-      if sottocat not in disponibili:
-        disponibili.append(sottocat)
-  return disponibili
-
 
 COLORI_CATEGORIE = {
     "TAVOLI": "#0056b3",
@@ -262,7 +247,7 @@ def carica_dati_esterni():
     # Vengono richiesti solo i campi necessari; gli allegati restano nel DB
     # ma non vengono caricati nella pagina del magazzino.
     res_prod = supabase.table("prodotti_noleggio").select(
-        "id,codice,nome,categoria,sottocategoria,quantita,posizione,costo_noleggio,note,foto_path"
+        "id,codice,nome,categoria,quantita,posizione,costo_noleggio,note,foto_path"
     ).order("nome").execute()
     prodotti = res_prod.data or []
 
@@ -310,7 +295,7 @@ def salva_dati_esterni():
     # SELECT aggiuntive per ogni prodotto.
     for p in str_lit.session_state.prodotti_noleggio:
       payload = {k: p.get(k) for k in (
-          "codice", "nome", "categoria", "sottocategoria", "quantita", "posizione",
+          "codice", "nome", "categoria", "quantita", "posizione",
           "costo_noleggio", "note", "foto_path")}
       payload = {k: v for k, v in payload.items() if v is not None}
       if p.get("id"):
@@ -808,29 +793,6 @@ def modale_gestione_prodotto():
             if selezionata:
               f_categorie.append(cat_nome)
 
-      # Il form Streamlit non esegue un rerun quando si spunta una checkbox.
-      # Mostriamo quindi sempre l’elenco completo, ordinato per categoria principale.
-      sottocat_menu = ["Nessuna sottocategoria"]
-      for categoria_principale, elenco_sottocat in SOTTOCATEGORIE_PER_CATEGORIA.items():
-        for sottocat in elenco_sottocat:
-          voce = f"{categoria_principale} → {sottocat}"
-          if voce not in sottocat_menu:
-            sottocat_menu.append(voce)
-      sottocat_corrente = str(p_edit.get("sottocategoria") or "")
-      sottocat_index = next(
-          (indice for indice, voce in enumerate(sottocat_menu) if voce.endswith(f"→ {sottocat_corrente}")),
-          0,
-      ) if sottocat_corrente else 0
-      f_sottocategoria_menu = str_lit.selectbox(
-          "↳ Sottocategoria (facoltativa, massimo una)",
-          sottocat_menu,
-          index=sottocat_index,
-      )
-      f_sottocategoria = (
-          "" if f_sottocategoria_menu == "Nessuna sottocategoria"
-          else f_sottocategoria_menu.split(" → ", 1)[1]
-      )
-
     with col_form2:
       f_qta = str_lit.number_input(
           "📦 Quantità",
@@ -861,7 +823,6 @@ def modale_gestione_prodotto():
           "codice": f_codice.strip(),
           "nome": f_nome,
           "categoria": ", ".join(f_categorie) if f_categorie else CATEGORIE_PRODOTTI[0],
-          "sottocategoria": f_sottocategoria,
           "quantita": f_qta,
           "posizione": f_pos,
           "costo_noleggio": f_prezzo,
@@ -1430,7 +1391,7 @@ else:
       
       str_lit.subheader("📦 Magazzino & Noleggio Attrezzature")
 
-      col_btn_nuovo, col_cat_filtro, col_sottocat_filtro, col_search = str_lit.columns([1, 1.35, 1.35, 2.3])
+      col_btn_nuovo, col_cat_filtro, col_search = str_lit.columns([1, 1.5, 2.5])
       with col_btn_nuovo:
         if is_admin:
           str_lit.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
@@ -1447,16 +1408,6 @@ else:
             "Filtra per Categoria", cat_opzioni_mag, key="filtro_cat_magazzino"
         )
 
-      with col_sottocat_filtro:
-        sottocat_opzioni_mag = ["Tutte le sottocategorie"] + sottocategorie_disponibili(
-            CATEGORIE_PRODOTTI if categoria_filtro_mag == "Tutte le categorie" else [categoria_filtro_mag]
-        )
-        sottocategoria_filtro_mag = str_lit.selectbox(
-            "Filtra per Sottocategoria",
-            sottocat_opzioni_mag,
-            key="filtro_sottocat_magazzino",
-        )
-
       with col_search:
         default_search = codice_scansionato if codice_scansionato else ""
         ricerca_query = str_lit.text_input(
@@ -1469,14 +1420,13 @@ else:
       prodotti_filtrati = []
       for idx, p in enumerate(str_lit.session_state.prodotti_noleggio):
         match_cat = (categoria_filtro_mag == "Tutte le categorie") or (categoria_filtro_mag in categorie_prodotto(p.get("categoria")))
-        match_sottocat = (sottocategoria_filtro_mag == "Tutte le sottocategorie") or (str(p.get("sottocategoria") or "") == sottocategoria_filtro_mag)
         match_text = (
             not testo_ricerca
             or testo_ricerca in p.get("nome", "").lower()
             or testo_ricerca in p.get("codice", "").lower()
             or testo_ricerca in testo_categorie(p.get("categoria")).lower()
         )
-        if match_cat and match_sottocat and match_text:
+        if match_cat and match_text:
           prodotti_filtrati.append((idx, p))
 
       page_size = 50
@@ -1801,14 +1751,6 @@ else:
             cat_selezionata_filtro = str_lit.selectbox(
                 "📂 Seleziona Categoria", cat_opzioni, key="filtro_cat_catalogo"
             )
-            sottocat_opzioni_cat = ["Tutte le sottocategorie"] + sottocategorie_disponibili(
-                CATEGORIE_PRODOTTI if cat_selezionata_filtro == "Tutte le categorie" else [cat_selezionata_filtro]
-            )
-            sottocat_selezionata_filtro = str_lit.selectbox(
-                "↳ Seleziona Sottocategoria",
-                sottocat_opzioni_cat,
-                key="filtro_sottocat_catalogo",
-            )
             ricerca_cat = str_lit.text_input(
                 "Cerca per nome o codice", key="search_cat_lista", placeholder="Digita per cercare un prodotto..."
             )
@@ -1819,7 +1761,6 @@ else:
           mostra_prodotti = (
               (t_ricerca != "")
               or (cat_selezionata_filtro != "Tutte le categorie")
-              or (sottocat_selezionata_filtro != "Tutte le sottocategorie")
           )
 
           if not mostra_prodotti:
@@ -1833,10 +1774,9 @@ else:
               codice_item = p_item.get("codice", "").lower()
 
               match_cat = (cat_selezionata_filtro == "Tutte le categorie") or (cat_selezionata_filtro in categorie_item)
-              match_sottocat = (sottocat_selezionata_filtro == "Tutte le sottocategorie") or (str(p_item.get("sottocategoria") or "") == sottocat_selezionata_filtro)
               match_text = (t_ricerca == "") or (t_ricerca in nome_item) or (t_ricerca in codice_item)
 
-              if match_cat and match_sottocat and match_text:
+              if match_cat and match_text:
                 prodotti_filtrati_cat.append((p_idx, p_item))
 
             with str_lit.container(height=550, border=True):
@@ -1852,7 +1792,6 @@ else:
                     str_lit.markdown(
                         f"**{p_item.get('nome')}**"
                         f" (`{testo_categorie(p_item.get('categoria'))}`)"
-                        f"{(' → ' + str(p_item.get('sottocategoria'))) if p_item.get('sottocategoria') else ''}"
                     )
                     str_caption = (
                         f"Disp: {p_item.get('quantita', 0)} | Pos:"
