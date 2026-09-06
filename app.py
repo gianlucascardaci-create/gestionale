@@ -94,11 +94,35 @@ str_lit.markdown(
 
     div[data-testid="stVerticalBlockBorderWrapper"]::-webkit-scrollbar,
     div[data-testid="stScrollable"]::-webkit-scrollbar,
-    div[aria-label="Scrollable container"]::-webkit-scrollbar {
-        width: 14px !important;
+    div[aria-label="Scrollable container"]::-webkit-scrollbar,
+    div[data-testid="stVerticalBlockBorderWrapper"][style*="550px"]::-webkit-scrollbar {
+        width: 16px !important;
         display: block !important;
         visibility: visible !important;
         opacity: 1 !important;
+    }
+
+    /* Catalogo Lista Attrezzature: contenitore alto 550px */
+    div[data-testid="stVerticalBlockBorderWrapper"][style*="550px"],
+    div[data-testid="stVerticalBlockBorderWrapper"][style*="height: 550"] {
+        overflow-y: scroll !important;
+        scrollbar-width: auto !important;
+        scrollbar-color: #0056b3 #f3f4f6 !important;
+        scrollbar-gutter: stable !important;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"][style*="550px"]::-webkit-scrollbar-thumb,
+    div[data-testid="stVerticalBlockBorderWrapper"][style*="height: 550"]::-webkit-scrollbar-thumb {
+        background: #0056b3 !important;
+        background-color: #0056b3 !important;
+        border-radius: 8px !important;
+        border: 2px solid #f3f4f6 !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"][style*="550px"]::-webkit-scrollbar-track,
+    div[data-testid="stVerticalBlockBorderWrapper"][style*="height: 550"]::-webkit-scrollbar-track {
+        background: #f3f4f6 !important;
+        visibility: visible !important;
     }
 
     button[kind="primary"], 
