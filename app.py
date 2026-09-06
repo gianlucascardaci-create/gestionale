@@ -808,20 +808,28 @@ def modale_gestione_prodotto():
             if selezionata:
               f_categorie.append(cat_nome)
 
-      sottocat_opzioni = []
-      for categoria_principale in f_categorie:
-        for sottocat in SOTTOCATEGORIE_PER_CATEGORIA.get(categoria_principale, []):
-          if sottocat not in sottocat_opzioni:
-            sottocat_opzioni.append(sottocat)
+      # Il form Streamlit non esegue un rerun quando si spunta una checkbox.
+      # Mostriamo quindi sempre l’elenco completo, ordinato per categoria principale.
+      sottocat_menu = ["Nessuna sottocategoria"]
+      for categoria_principale, elenco_sottocat in SOTTOCATEGORIE_PER_CATEGORIA.items():
+        for sottocat in elenco_sottocat:
+          voce = f"{categoria_principale} → {sottocat}"
+          if voce not in sottocat_menu:
+            sottocat_menu.append(voce)
       sottocat_corrente = str(p_edit.get("sottocategoria") or "")
-      sottocat_menu = ["Nessuna sottocategoria"] + sottocat_opzioni
-      sottocat_index = sottocat_menu.index(sottocat_corrente) if sottocat_corrente in sottocat_menu else 0
+      sottocat_index = next(
+          (indice for indice, voce in enumerate(sottocat_menu) if voce.endswith(f"→ {sottocat_corrente}")),
+          0,
+      ) if sottocat_corrente else 0
       f_sottocategoria_menu = str_lit.selectbox(
           "↳ Sottocategoria (facoltativa, massimo una)",
           sottocat_menu,
           index=sottocat_index,
       )
-      f_sottocategoria = "" if f_sottocategoria_menu == "Nessuna sottocategoria" else f_sottocategoria_menu
+      f_sottocategoria = (
+          "" if f_sottocategoria_menu == "Nessuna sottocategoria"
+          else f_sottocategoria_menu.split(" → ", 1)[1]
+      )
 
     with col_form2:
       f_qta = str_lit.number_input(
