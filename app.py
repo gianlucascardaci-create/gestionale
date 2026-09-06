@@ -70,11 +70,33 @@ str_lit.markdown(
         display: block !important;
     }
 
-    ::-webkit-scrollbar-thumb {
+    ::-webkit-scrollbar-thumb,
+    div[data-testid="stVerticalBlockBorderWrapper"]::-webkit-scrollbar-thumb,
+    div[data-testid="stScrollable"]::-webkit-scrollbar-thumb,
+    div[aria-label="Scrollable container"]::-webkit-scrollbar-thumb {
         background-color: #0056b3 !important;
+        background: #0056b3 !important;
         border-radius: 6px !important;
         border: 2px solid #f3f4f6 !important;
         min-height: 40px !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        display: block !important;
+    }
+
+    div[data-testid="stVerticalBlockBorderWrapper"],
+    div[data-testid="stScrollable"],
+    div[aria-label="Scrollable container"] {
+        scrollbar-width: auto !important;
+        scrollbar-color: #0056b3 #f3f4f6 !important;
+        overflow-y: scroll !important;
+    }
+
+    div[data-testid="stVerticalBlockBorderWrapper"]::-webkit-scrollbar,
+    div[data-testid="stScrollable"]::-webkit-scrollbar,
+    div[aria-label="Scrollable container"]::-webkit-scrollbar {
+        width: 14px !important;
+        display: block !important;
         visibility: visible !important;
         opacity: 1 !important;
     }
