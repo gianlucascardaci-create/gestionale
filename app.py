@@ -152,16 +152,16 @@ def testo_categorie(valore):
 
 COLORI_CATEGORIE = {
     "TAVOLI": "#0056b3",
-    "SEDIE": "#d97706",
-    "PIATTI E SOTTOPIATTI": "#059669",
-    "BICCHIERI": "#4f86c6",
-    "CUCINA": "#7c3aed",
-    "ARREDO": "#db2777",
-    "TOVAGLIATO": "#0284c7",
+    "SEDIE": "#2f6fb0",
+    "PIATTI E SOTTOPIATTI": "#4b9f9a",
+    "BICCHIERI": "#6b8fc4",
+    "CUCINA": "#6f7fbf",
+    "ARREDO": "#567d8e",
+    "TOVAGLIATO": "#2d8bb8",
     "ARGENTERIA": "#4b5563",
-    "POSATERIA": "#ca8a04",
-    "VASSOI": "#0d9488",
-    "LUCI E CANDELABRI": "#ea580c",
+    "POSATERIA": "#3d6b8f",
+    "VASSOI": "#3d9b9b",
+    "LUCI E CANDELABRI": "#7893b0",
 }
 
 LISTA_RUOLI_DISPONIBILI = [
