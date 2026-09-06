@@ -135,6 +135,21 @@ CATEGORIE_PRODOTTI = [
     "LUCI E CANDELABRI",
 ]
 
+
+def categorie_prodotto(valore):
+  """Restituisce sempre una lista, compatibile con dati vecchi e multipli."""
+  if isinstance(valore, list):
+    return [str(x).strip() for x in valore if str(x).strip()]
+  if not valore:
+    return []
+  return [parte.strip() for parte in str(valore).split(",") if parte.strip()]
+
+
+def testo_categorie(valore):
+  categorie = categorie_prodotto(valore)
+  return ", ".join(categorie) if categorie else "N/D"
+
+
 COLORI_CATEGORIE = {
     "TAVOLI": "#0056b3",
     "SEDIE": "#d97706",
@@ -636,7 +651,7 @@ if codice_scansionato:
     with col_qr_info:
       str_lit.subheader(prodotto_qr.get("nome") or "Prodotto")
       str_lit.markdown(f"**Codice:** {prodotto_qr.get('codice') or '-'}")
-      str_lit.markdown(f"**Categoria:** {prodotto_qr.get('categoria') or '-'}")
+      str_lit.markdown(f"**Categorie:** {testo_categorie(prodotto_qr.get('categoria'))}")
       str_lit.markdown(f"**Quantità:** {prodotto_qr.get('quantita') or 0}")
       str_lit.markdown(f"**Posizione:** {prodotto_qr.get('posizione') or '-'}")
       str_lit.markdown(f"**Note:** {prodotto_qr.get('note') or 'Nessuna nota.'}")
@@ -692,13 +707,15 @@ def modale_gestione_prodotto():
       f_nome = str_lit.text_input("🏷️ Nome Prodotto", value=p_edit.get("nome", ""))
       f_codice = str_lit.text_input("🆔 Codice Identificativo", value=p_edit.get("codice", ""))
 
-      cat_corrente = p_edit.get("categoria", "TAVOLI")
-      cat_index = (
-          CATEGORIE_PRODOTTI.index(cat_corrente)
-          if cat_corrente in CATEGORIE_PRODOTTI
-          else 0
+      cat_correnti = categorie_prodotto(p_edit.get("categoria", "TAVOLI"))
+      cat_default = [cat for cat in cat_correnti if cat in CATEGORIE_PRODOTTI]
+      if not cat_default:
+        cat_default = [CATEGORIE_PRODOTTI[0]]
+      f_categorie = str_lit.multiselect(
+          "📂 Categorie (puoi sceglierne più di una)",
+          CATEGORIE_PRODOTTI,
+          default=cat_default,
       )
-      f_categoria = str_lit.selectbox("📂 Categoria", CATEGORIE_PRODOTTI, index=cat_index)
 
     with col_form2:
       f_qta = str_lit.number_input(
@@ -729,7 +746,7 @@ def modale_gestione_prodotto():
           "id": p_edit.get("id"),
           "codice": f_codice.strip(),
           "nome": f_nome,
-          "categoria": f_categoria,
+          "categoria": ", ".join(f_categorie) if f_categorie else CATEGORIE_PRODOTTI[0],
           "quantita": f_qta,
           "posizione": f_pos,
           "costo_noleggio": f_prezzo,
@@ -1326,12 +1343,12 @@ else:
       testo_ricerca = ricerca_query.strip().lower()
       prodotti_filtrati = []
       for idx, p in enumerate(str_lit.session_state.prodotti_noleggio):
-        match_cat = (categoria_filtro_mag == "Tutte le categorie") or (p.get("categoria") == categoria_filtro_mag)
+        match_cat = (categoria_filtro_mag == "Tutte le categorie") or (categoria_filtro_mag in categorie_prodotto(p.get("categoria")))
         match_text = (
             not testo_ricerca
             or testo_ricerca in p.get("nome", "").lower()
             or testo_ricerca in p.get("codice", "").lower()
-            or testo_ricerca in p.get("categoria", "").lower()
+            or testo_ricerca in testo_categorie(p.get("categoria")).lower()
         )
         if match_cat and match_text:
           prodotti_filtrati.append((idx, p))
@@ -1371,7 +1388,7 @@ else:
               )
               str_lit.markdown(
                   f"<div class='prodotto-griglia-riga'><b>Codice:</b> {p.get('codice', '-')}</div>"
-                  f"<div class='prodotto-griglia-riga'><b>Cat.:</b> {p.get('categoria', 'N/D')}</div>"
+                  f"<div class='prodotto-griglia-riga'><b>Categorie:</b> {testo_categorie(p.get('categoria'))}</div>"
                   f"<div class='prodotto-griglia-riga'><b>Posizione:</b> {p.get('posizione', '-')}</div>",
                   unsafe_allow_html=True,
               )
@@ -1673,10 +1690,11 @@ else:
             prodotti_filtrati_cat = []
             for p_idx, p_item in enumerate(prod_disp):
               cat_item = p_item.get("categoria", "")
+              categorie_item = categorie_prodotto(cat_item)
               nome_item = p_item.get("nome", "").lower()
               codice_item = p_item.get("codice", "").lower()
 
-              match_cat = (cat_selezionata_filtro == "Tutte le categorie") or (cat_item == cat_selezionata_filtro)
+              match_cat = (cat_selezionata_filtro == "Tutte le categorie") or (cat_selezionata_filtro in categorie_item)
               match_text = (t_ricerca == "") or (t_ricerca in nome_item) or (t_ricerca in codice_item)
 
               if match_cat and match_text:
@@ -1694,7 +1712,7 @@ else:
                   with c_info_cat:
                     str_lit.markdown(
                         f"**{p_item.get('nome')}**"
-                        f" (`{p_item.get('categoria')}`)"
+                        f" (`{testo_categorie(p_item.get('categoria'))}`)"
                     )
                     str_caption = (
                         f"Disp: {p_item.get('quantita', 0)} | Pos:"
