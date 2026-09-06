@@ -5,6 +5,7 @@ import json
 import os
 import socket
 import uuid
+import unicodedata
 import qrcode
 import streamlit as str_lit
 from supabase import create_client, Client
@@ -215,6 +216,40 @@ def testo_categorie(valore):
   categorie = categorie_prodotto(valore)
   return ", ".join(categorie) if categorie else "N/D"
 
+
+def normalizza_testo_ricerca(valore):
+  testo = unicodedata.normalize("NFD", str(valore or "").lower())
+  testo = "".join(car for car in testo if unicodedata.category(car) != "Mn")
+  return " ".join(testo.split())
+
+
+def varianti_parola_italiana(parola):
+  parola = normalizza_testo_ricerca(parola)
+  varianti = {parola}
+  if len(parola) >= 4:
+    if parola.endswith("i"):
+      varianti.update({parola[:-1] + "o", parola[:-1] + "e", parola[:-1] + "a"})
+    elif parola.endswith("e"):
+      varianti.update({parola[:-1] + "a", parola[:-1] + "o", parola[:-1] + "i"})
+    elif parola.endswith("a"):
+      varianti.update({parola[:-1] + "e", parola[:-1] + "i"})
+    elif parola.endswith("o"):
+      varianti.add(parola[:-1] + "i")
+  return varianti
+
+
+def ricerca_intelligente(query, campi):
+  query_norm = normalizza_testo_ricerca(query)
+  if not query_norm:
+    return True
+  testo_norm = normalizza_testo_ricerca(" ".join(str(c or "") for c in campi))
+  if query_norm in testo_norm:
+    return True
+  parole_query = query_norm.split()
+  return all(
+      any(variante in testo_norm for variante in varianti_parola_italiana(parola))
+      for parola in parole_query
+  )
 
 
 COLORI_CATEGORIE = {
@@ -1416,15 +1451,13 @@ else:
             placeholder="Cerca per nome, codice...",
         )
 
-      testo_ricerca = ricerca_query.strip().lower()
+      testo_ricerca = ricerca_query.strip()
       prodotti_filtrati = []
       for idx, p in enumerate(str_lit.session_state.prodotti_noleggio):
         match_cat = (categoria_filtro_mag == "Tutte le categorie") or (categoria_filtro_mag in categorie_prodotto(p.get("categoria")))
-        match_text = (
-            not testo_ricerca
-            or testo_ricerca in p.get("nome", "").lower()
-            or testo_ricerca in p.get("codice", "").lower()
-            or testo_ricerca in testo_categorie(p.get("categoria")).lower()
+        match_text = ricerca_intelligente(
+            testo_ricerca,
+            [p.get("nome", ""), p.get("codice", ""), testo_categorie(p.get("categoria"))],
         )
         if match_cat and match_text:
           prodotti_filtrati.append((idx, p))
@@ -1756,7 +1789,7 @@ else:
             )
 
           prod_disp = str_lit.session_state.prodotti_noleggio
-          t_ricerca = ricerca_cat.strip().lower()
+          t_ricerca = ricerca_cat.strip()
 
           mostra_prodotti = (
               (t_ricerca != "")
@@ -1770,11 +1803,14 @@ else:
             for p_idx, p_item in enumerate(prod_disp):
               cat_item = p_item.get("categoria", "")
               categorie_item = categorie_prodotto(cat_item)
-              nome_item = p_item.get("nome", "").lower()
-              codice_item = p_item.get("codice", "").lower()
+              nome_item = p_item.get("nome", "")
+              codice_item = p_item.get("codice", "")
 
               match_cat = (cat_selezionata_filtro == "Tutte le categorie") or (cat_selezionata_filtro in categorie_item)
-              match_text = (t_ricerca == "") or (t_ricerca in nome_item) or (t_ricerca in codice_item)
+              match_text = ricerca_intelligente(
+                  t_ricerca,
+                  [nome_item, codice_item, testo_categorie(p_item.get("categoria"))],
+              )
 
               if match_cat and match_text:
                 prodotti_filtrati_cat.append((p_idx, p_item))
