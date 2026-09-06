@@ -731,11 +731,20 @@ def modale_gestione_prodotto():
       cat_default = [cat for cat in cat_correnti if cat in CATEGORIE_PRODOTTI]
       if not cat_default:
         cat_default = [CATEGORIE_PRODOTTI[0]]
-      f_categorie = str_lit.multiselect(
-          "📂 Categorie (puoi sceglierne più di una)",
-          CATEGORIE_PRODOTTI,
-          default=cat_default,
-      )
+      str_lit.markdown("**📂 Categorie (puoi sceglierne più di una)**")
+      f_categorie = []
+      cat_key_suffix = str(p_edit.get("id") or p_edit.get("codice") or "nuovo")
+      for cat_start in range(0, len(CATEGORIE_PRODOTTI), 3):
+        cat_cols = str_lit.columns(3)
+        for cat_pos, cat_nome in enumerate(CATEGORIE_PRODOTTI[cat_start:cat_start + 3]):
+          with cat_cols[cat_pos]:
+            selezionata = str_lit.checkbox(
+                cat_nome,
+                value=(cat_nome in cat_default),
+                key=f"cat_check_{cat_key_suffix}_{cat_nome}",
+            )
+            if selezionata:
+              f_categorie.append(cat_nome)
 
     with col_form2:
       f_qta = str_lit.number_input(
