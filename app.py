@@ -154,7 +154,7 @@ COLORI_CATEGORIE = {
     "TAVOLI": "#0056b3",
     "SEDIE": "#d97706",
     "PIATTI E SOTTOPIATTI": "#059669",
-    "BICCHIERI": "#dc2626",
+    "BICCHIERI": "#4f86c6",
     "CUCINA": "#7c3aed",
     "ARREDO": "#db2777",
     "TOVAGLIATO": "#0284c7",
