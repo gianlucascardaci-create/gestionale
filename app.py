@@ -110,6 +110,20 @@ str_lit.markdown(
         border-color: #9ca3af !important;
     }
 
+    /* Tag delle categorie selezionate nel multiselect */
+    div[data-baseweb="select"] [data-baseweb="tag"],
+    div[data-baseweb="select"] span[data-baseweb="tag"] {
+        background-color: #0056b3 !important;
+        color: #ffffff !important;
+        border: 1px solid #004494 !important;
+        border-radius: 7px !important;
+        font-weight: 700 !important;
+    }
+    div[data-baseweb="select"] [data-baseweb="tag"] svg {
+        fill: #ffffff !important;
+        color: #ffffff !important;
+    }
+
     .card-desc {
         height: 45px;
         color: #555;
