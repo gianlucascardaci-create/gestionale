@@ -110,18 +110,24 @@ str_lit.markdown(
         border-color: #9ca3af !important;
     }
 
-    /* Tag delle categorie selezionate nel multiselect */
-    div[data-baseweb="select"] [data-baseweb="tag"],
-    div[data-baseweb="select"] span[data-baseweb="tag"] {
+    /* Tag delle categorie selezionate nel multiselect: regola globale */
+    [data-baseweb="tag"],
+    div[data-baseweb="tag"],
+    span[data-baseweb="tag"] {
+        background: #0056b3 !important;
         background-color: #0056b3 !important;
         color: #ffffff !important;
         border: 1px solid #004494 !important;
         border-radius: 7px !important;
         font-weight: 700 !important;
+        box-shadow: none !important;
     }
-    div[data-baseweb="select"] [data-baseweb="tag"] svg {
-        fill: #ffffff !important;
+    [data-baseweb="tag"] *,
+    [data-baseweb="tag"] span,
+    [data-baseweb="tag"] svg {
         color: #ffffff !important;
+        fill: #ffffff !important;
+        stroke: #ffffff !important;
     }
 
     .card-desc {
