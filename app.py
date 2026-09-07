@@ -35,27 +35,31 @@ st.markdown(f"### {MESI[mese]} {anno}")
 for col,label in zip(st.columns(7),["Lun","Mar","Mer","Gio","Ven","Sab","Dom"]):
     with col: st.markdown(f"**{label}**")
 
-# Nel calendario compaiono solo il numero e indicatori, senza testi degli eventi.
+# Calendario tradizionale: ogni data è un riquadro, con numero in alto e gli eventi sotto.
 for settimana in calendar.Calendar(firstweekday=0).monthdatescalendar(int(anno),int(mese)):
     cols=st.columns(7)
     for col,giorno in zip(cols,settimana):
         with col:
             if giorno.month!=int(mese):
-                st.markdown('<div class="cell muted"></div>',unsafe_allow_html=True); continue
+                with st.container(border=True): st.write("")
+                continue
             eventi=[e for e in st.session_state.eventi if e["data"]==giorno]
-            st.markdown('<div class="cell">',unsafe_allow_html=True)
-            st.markdown(f'<div class="num">{giorno.day}</div>',unsafe_allow_html=True)
-            for e in eventi:
-                classe="b" if e["stato"]=="confermato" else "o" if e["stato"]=="non confermato" else "t"
-                st.markdown(f'<div class="mark {classe}" title="{e["titolo"]}"></div>',unsafe_allow_html=True)
-            if not eventi: st.markdown('<div style="height:9px"></div>',unsafe_allow_html=True)
-            st.markdown('</div>',unsafe_allow_html=True)
-            # Un solo click sul numero/giorno: seleziona la data e apre il pannello ordinato sotto.
-            if st.button(f"{giorno.day}",key=f"day_{giorno}",use_container_width=True):
-                st.session_state.selected_day=giorno
-                st.session_state.open_event=None
-                st.rerun()
-
+            with st.container(border=True):
+                # Il numero del giorno è l’area neutra per selezionare/creare.
+                if st.button(str(giorno.day),key=f"day_{giorno}",use_container_width=True):
+                    st.session_state.selected_day=giorno
+                    st.session_state.open_event="create" if not eventi else None
+                    st.rerun()
+                if not eventi:
+                    st.caption("Nessun evento")
+                else:
+                    for e in eventi:
+                        simbolo="🔵" if e["stato"]=="confermato" else "🟠" if e["stato"]=="non confermato" else "🟢"
+                        # Ogni riga evento è indipendente e apre la relativa scheda.
+                        if st.button(f"{simbolo} {e['titolo']}",key=f"open_{e['id']}",use_container_width=True):
+                            st.session_state.selected_day=giorno
+                            st.session_state.open_event=e["id"]
+                            st.rerun()
 st.divider()
 selected=st.session_state.get("selected_day",date(int(anno),int(mese),1))
 if selected.month!=int(mese) or selected.year!=int(anno): selected=date(int(anno),int(mese),1)
