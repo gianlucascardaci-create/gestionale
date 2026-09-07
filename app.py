@@ -1,4 +1,5 @@
 from datetime import date, datetime
+import calendar
 import base64
 from io import BytesIO
 import json
@@ -1377,7 +1378,8 @@ else:
           str_lit.markdown("### Noleggi Confermati")
           str_lit.markdown("<div class='card-desc'>Calendario dei noleggi e degli eventi.</div>", unsafe_allow_html=True)
           if str_lit.button("Apri Noleggi", use_container_width=True, type="primary", key="btn_h_noleggi_admin"):
-            str_lit.toast("Sezione Noleggi Confermati pronta per l’integrazione.")
+            str_lit.session_state.area_selezionata = "opzione_noleggi"
+            str_lit.rerun()
       
     else:
       c1, c2, c3 = str_lit.columns(3)
@@ -1449,7 +1451,8 @@ else:
             str_lit.markdown("### Noleggi Confermati")
             str_lit.markdown("<div class='card-desc'>Calendario dei noleggi e degli eventi.</div>", unsafe_allow_html=True)
             if str_lit.button("Apri Noleggi", use_container_width=True, type="primary", key="btn_h_noleggi_magazzino"):
-              str_lit.toast("Sezione Noleggi Confermati pronta per l’integrazione.")
+              str_lit.session_state.area_selezionata = "opzione_noleggi"
+              str_lit.rerun()
 
   else:
     if str_lit.button("⬅️ Torna alla Home"):
@@ -1459,7 +1462,11 @@ else:
       str_lit.rerun()
       str_lit.stop()
 
-    if str_lit.session_state.area_selezionata == "opzione_1":
+    if str_lit.session_state.area_selezionata == "opzione_noleggi":
+      str_lit.subheader("📅 Noleggi Confermati")
+      str_lit.info("La sezione Noleggi Confermati è stata aperta correttamente. Il calendario e la tabella Supabase verranno collegati nel passaggio successivo, senza modificare le sezioni già esistenti.")
+
+    elif str_lit.session_state.area_selezionata == "opzione_1":
       
       str_lit.subheader("📦 Magazzino & Noleggio Attrezzature")
 
