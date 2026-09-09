@@ -149,15 +149,19 @@ str_lit.markdown(
     
     div.stButton > button:not([kind="primary"]), .stButton > button:not([kind="primary"]) {
         background-color: #ffffff !important;
-        color: #333333 !important;
-        border: 1px solid #d1d5db !important;
-        border-radius: 6px !important;
-        font-weight: 500 !important;
+        color: #344054 !important;
+        border: 1px solid #cfd8e3 !important;
+        border-radius: 9px !important;
+        font-weight: 650 !important;
+        min-height: 36px !important;
+        padding: .45rem 1rem !important;
+        box-shadow: 0 1px 2px rgba(16,24,40,.06) !important;
     }
     div.stButton > button:not([kind="primary"]):hover, .stButton > button:not([kind="primary"]):hover {
-        background-color: #f3f4f6 !important;
-        color: #111111 !important;
-        border-color: #9ca3af !important;
+        background-color: #f8fafc !important;
+        color: #102a43 !important;
+        border-color: #98a2b3 !important;
+        box-shadow: 0 2px 5px rgba(16,24,40,.10) !important;
     }
 
     /* Tag delle categorie selezionate nel multiselect: regola globale */
@@ -952,7 +956,7 @@ def modale_modifica_noleggio_demo(noleggio_id):
     str_lit.session_state.noleggio_demo_modifica = None
     str_lit.success("Modifiche salvate nella demo temporanea.")
     str_lit.rerun()
-  if puo_modificare and str_lit.button("🗑️ Elimina noleggio", key=f"elimina_noleggio_{noleggio_id}", use_container_width=True):
+  if puo_modificare and str_lit.button("Elimina noleggio", key=f"elimina_noleggio_{noleggio_id}", use_container_width=True):
     str_lit.session_state.noleggio_demo_eliminazione_in_attesa = noleggio_id
     str_lit.rerun()
 
@@ -996,12 +1000,12 @@ def modale_catering_da_calendario(evento):
   for sezione in sezioni_visibili.get(ruolo, []):
     mostra_note_calendario(*sezione)
   if ruolo in {"Amministratore", "Wedding"} and indice_evento is not None:
-    if str_lit.button("✏️ Modifica evento, note e allegati", type="primary", use_container_width=True, key=f"modifica_calendario_catering_{indice_evento}"):
+    if str_lit.button("Modifica evento", type="primary", use_container_width=True, key=f"modifica_calendario_catering_{indice_evento}"):
       str_lit.session_state.evento_catering_demo_selezionato = None
       str_lit.session_state.indice_evento_catering_da_modificare = indice_evento
       str_lit.rerun()
   if ruolo in {"Amministratore", "Wedding"}:
-    with str_lit.popover("🗑️ Elimina evento Catering"):
+    with str_lit.popover("Elimina evento"):
       str_lit.warning("L'eliminazione è definitiva.")
       if str_lit.button("Conferma eliminazione evento", key=f"elimina_catering_cal_{evento.get('id', evento.get('nome_evento', 'evento'))}", type="primary", use_container_width=True):
         try:
@@ -1084,7 +1088,7 @@ def mostra_noleggi_demo():
   .planner-event.pending {background:#fed7aa; color:#9a3412;}
   .planner-event.catering {background:#bbf7d0; color:#166534;}
   .planner-empty {font-size:.56rem; color:#a0aec0; margin-top:7px;}
-  div[data-testid='stButton'] button[kind='secondary'] {border-radius:7px; min-height:22px; height:22px; padding:0 4px; font-size:.72rem; line-height:1;}
+  div[data-testid='stButton'] button[kind='secondary'] {border-radius:8px; min-height:34px; height:34px; padding:0 10px; font-size:.82rem; line-height:1;}
   </style>
   """, unsafe_allow_html=True)
 
@@ -1704,7 +1708,7 @@ else:
 
   col_top1, col_top2 = str_lit.columns([7.2, 1.45])
   with col_top2:
-    if str_lit.button("⎋ Esci", key="btn_esci_app", use_container_width=True, type="secondary"):
+    if str_lit.button("Esci", key="btn_esci_app", use_container_width=True, type="secondary"):
       str_lit.session_state.utente_loggato = None
       str_lit.session_state.area_selezionata = None
       str_lit.rerun()
@@ -1951,7 +1955,7 @@ else:
   else:
     col_home, _ = str_lit.columns([1.45, 7.2])
     with col_home:
-      if str_lit.button("← Torna alla Home", key="btn_torna_home", type="secondary", use_container_width=True):
+      if str_lit.button("Torna alla Home", key="btn_torna_home", type="secondary", use_container_width=True):
         str_lit.session_state.area_selezionata = None
         str_lit.session_state.modale_prodotto = None
         str_lit.query_params.clear()
