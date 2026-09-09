@@ -924,14 +924,22 @@ def modale_modifica_noleggio_demo(noleggio_id):
         dati = noleggio.get(f"{campo}_dati_b64", "")
         mime = noleggio.get(f"{campo}_mime", "application/octet-stream")
         str_lit.markdown(f"**{etichetta}:** `{nome}`")
-        str_lit.download_button(
-            f"📥 Scarica allegato {etichetta}",
-            data=base64.b64decode(dati) if dati else f"Allegato demo: {nome}".encode("utf-8"),
-            file_name=nome,
-            mime=mime,
-            key=f"magazzino_sola_lettura_{noleggio_id}_{campo}",
-            use_container_width=True,
-        )
+        if dati:
+          dati_allegato = base64.b64decode(dati)
+          with str_lit.expander(f"Apri anteprima {etichetta}", expanded=False):
+            if mime.startswith("image/"):
+              str_lit.image(dati_allegato, width=420)
+              str_lit.caption("Per stampare: apri l'immagine in una nuova scheda e usa Stampa.")
+            elif mime == "application/pdf":
+              href_pdf = f"data:application/pdf;base64,{dati}"
+              str_lit.markdown(
+                  f'<a href="{href_pdf}" target="_blank" rel="noopener">Apri PDF in una nuova scheda e stampa</a>',
+                  unsafe_allow_html=True,
+              )
+            else:
+              str_lit.info("Anteprima non disponibile per questo formato. Apri il file dalla nuova scheda del browser per stamparlo.")
+        else:
+          str_lit.info("Anteprima non disponibile per questo allegato demo.")
     if not presenti:
       str_lit.info("Nessun allegato disponibile.")
     return
