@@ -933,25 +933,28 @@ def modale_catering_da_calendario(evento):
     str_lit.markdown(f"**Bambini:** {evento.get('bambini', 0)}")
     str_lit.markdown(f"**Staff:** {evento.get('staff', 0)}")
   str_lit.markdown("---")
-  str_lit.markdown("### Note per tutti")
-  str_lit.info(evento.get("note_tutti") or "Nessuna nota per tutti.")
-  for indice, allegato in enumerate(evento.get("allegati_tutti") or []):
-    str_lit.download_button(
-        f"📥 Scarica allegato: {allegato.get('nome_file', 'Allegato')}",
-        data=base64.b64decode(allegato.get("dati_b64", "")),
-        file_name=allegato.get("nome_file", f"allegato_{indice}"),
-        key=f"calendario_tutti_{evento.get('id', evento.get('nome_evento', 'evento'))}_{indice}",
-    )
-  if ruolo in {"Magazzino", "Magazzino2"}:
-    str_lit.markdown("### Note per il magazzino")
-    str_lit.info(evento.get("note_magazzino") or "Nessuna nota specifica per il magazzino.")
-    for indice, allegato in enumerate(evento.get("allegati_magazzino") or []):
+  def mostra_note_calendario(titolo, campo_note, campo_allegati, chiave):
+    str_lit.markdown(f"### {titolo}")
+    str_lit.info(evento.get(campo_note) or f"Nessuna nota per {chiave}.")
+    for indice, allegato in enumerate(evento.get(campo_allegati) or []):
       str_lit.download_button(
-          f"📥 Scarica allegato magazzino: {allegato.get('nome_file', 'Allegato')}",
+          f"📥 Scarica allegato: {allegato.get('nome_file', 'Allegato')}",
           data=base64.b64decode(allegato.get("dati_b64", "")),
-          file_name=allegato.get("nome_file", f"allegato_magazzino_{indice}"),
-          key=f"calendario_magazzino_{evento.get('id', evento.get('nome_evento', 'evento'))}_{indice}",
+          file_name=allegato.get("nome_file", f"allegato_{chiave}_{indice}"),
+          key=f"calendario_{chiave}_{evento.get('id', evento.get('nome_evento', 'evento'))}_{indice}",
       )
+
+  mostra_note_calendario("Note per tutti", "note_tutti", "allegati_tutti", "tutti")
+  sezioni_visibili = {
+      "Amministratore": [("Note per la sala", "note_sala", "allegati_sala", "sala"), ("Note per la cucina", "note_cucina", "allegati_cucina", "cucina"), ("Note per il magazzino", "note_magazzino", "allegati_magazzino", "magazzino")],
+      "Wedding": [("Note per la sala", "note_sala", "allegati_sala", "sala"), ("Note per la cucina", "note_cucina", "allegati_cucina", "cucina"), ("Note per il magazzino", "note_magazzino", "allegati_magazzino", "magazzino")],
+      "Cucina": [("Note per la cucina", "note_cucina", "allegati_cucina", "cucina")],
+      "Sala": [("Note per la sala", "note_sala", "allegati_sala", "sala")],
+      "Magazzino": [("Note per il magazzino", "note_magazzino", "allegati_magazzino", "magazzino")],
+      "Magazzino2": [("Note per il magazzino", "note_magazzino", "allegati_magazzino", "magazzino")],
+  }
+  for sezione in sezioni_visibili.get(ruolo, []):
+    mostra_note_calendario(*sezione)
   if ruolo in {"Amministratore", "Wedding"}:
     with str_lit.popover("🗑️ Elimina evento Catering"):
       str_lit.warning("L'eliminazione è definitiva.")
@@ -979,6 +982,7 @@ def mostra_noleggi_demo():
   mostra_catering = ruolo_calendario != "Magazzino2"
   mostra_noleggi = not solo_catering
   puo_creare_noleggio = ruolo_calendario in {"Amministratore", "Wedding", "Magazzino2"}
+  puo_creare_evento_catering = ruolo_calendario in {"Amministratore", "Wedding"}
   if not str_lit.session_state.eventi_caricati:
     str_lit.session_state.eventi_catering = carica_eventi_solo_quando_servono()
     str_lit.session_state.eventi_caricati = True
@@ -1064,30 +1068,20 @@ def mostra_noleggi_demo():
               str_lit.session_state.noleggio_demo_modifica = None
               str_lit.session_state.evento_catering_demo_selezionato = None
               str_lit.rerun()
-            eventi_presenti = False
-            for indice_noleggio, noleggio in enumerate(eventi_giorno):
-              eventi_presenti = True
+            marker_html = []
+            for noleggio in eventi_giorno:
               durata_giorni = (noleggio["fine"].date() - noleggio["inizio"].date()).days + 1
               stato = noleggio.get("stato", "confermato")
-              ruolo_corrente = (str_lit.session_state.get("utente_loggato") or {}).get("ruolo", "")
-              bloccato = stato != "confermato" and ruolo_corrente == "Magazzino"
-              simbolo = "🔵" if stato == "confermato" else "🟡"
-              testo_barra = f"{simbolo} NOL. · {durata_giorni}g"
-              if str_lit.button(testo_barra, key=f"cal_noleggio_{giorno}_{noleggio.get('id', indice_noleggio)}", use_container_width=True, disabled=bloccato, help="Noleggio non confermato" if bloccato else "Apri dettaglio noleggio"):
-                str_lit.session_state.noleggio_demo_giorno_selezionato = giorno
-                str_lit.session_state.noleggio_demo_modifica = noleggio.get("id")
-                str_lit.session_state.noleggio_demo_crea_data = None
-                str_lit.session_state.evento_catering_demo_selezionato = None
-                str_lit.rerun()
-            for indice_catering, evento_catering in enumerate(catering_giorno):
-              eventi_presenti = True
-              if str_lit.button(f"🟩 CAT. · {evento_catering.get('nome_evento', 'Catering')}", key=f"cal_catering_giorno_{giorno}_{evento_catering.get('id', indice_catering)}", use_container_width=True, help="Apri dettaglio evento Catering"):
-                str_lit.session_state.noleggio_demo_giorno_selezionato = giorno
-                str_lit.session_state.evento_catering_demo_selezionato = evento_catering
-                str_lit.session_state.noleggio_demo_modifica = None
-                str_lit.rerun()
-            if not eventi_presenti:
-              str_lit.markdown("<div class='noleggi-day-empty'>—</div>", unsafe_allow_html=True)
+              classe_inizio = " noleggi-event-bar-start" if giorno == noleggio["inizio"].date() else ""
+              classe_fine = " noleggi-event-bar-end" if giorno == noleggio["fine"].date() else ""
+              if stato == "confermato":
+                marker_html.append(f"<div class='noleggi-event-bar noleggi-event-bar-rental{classe_inizio}{classe_fine}' title='Noleggio di {durata_giorni} giorni'>NOL. · {durata_giorni}g</div>")
+              else:
+                marker_html.append(f"<div class='noleggi-event-bar noleggi-event-bar-pending{classe_inizio}{classe_fine}' title='Noleggio non confermato'>NOL. · da confermare</div>")
+            for evento_catering in catering_giorno:
+              marker_html.append(f"<div class='noleggi-event-bar noleggi-event-bar-catering' title='Catering: {evento_catering.get('nome_evento', 'Evento Catering')}'>CAT. · {evento_catering.get('nome_evento', 'Catering')}</div>")
+            contenuto_marker = "".join(marker_html) if marker_html else "<span class='noleggi-day-empty'>—</span>"
+            str_lit.markdown(f"<div class='noleggi-markers'>{contenuto_marker}</div>", unsafe_allow_html=True)
 
   with pannello_col:
     eventi_selezionati = [n for n in str_lit.session_state.noleggi_demo if mostra_noleggi and n["inizio"].date() <= giorno_selezionato <= n["fine"].date()]
@@ -1102,6 +1096,8 @@ def mostra_noleggi_demo():
         str_lit.session_state.noleggio_demo_crea_data = giorno_selezionato
         str_lit.session_state.noleggio_demo_modifica = None
         str_lit.rerun()
+      if puo_creare_evento_catering and str_lit.button("＋ Crea evento Catering", use_container_width=True, key="calendario_crea_evento_catering"):
+        modale_crea_evento(giorno_selezionato)
       str_lit.markdown("---")
       if not eventi_selezionati and not catering_selezionati:
         str_lit.info("Nessun evento in questa giornata." if solo_catering or not puo_creare_noleggio else "Nessun evento in questa giornata. Puoi creare un nuovo noleggio con il pulsante sopra.")
@@ -1311,7 +1307,7 @@ def modale_gestione_prodotto():
 
 
 @str_lit.dialog("🆕 Crea Nuovo Evento", width="large")
-def modale_crea_evento():
+def modale_crea_evento(data_precompilata=None):
   with str_lit.form("form_nuovo_evento_dialog"):
     str_lit.markdown("#### 📋 Dati Principali dell'Evento")
     col_n1, col_n2, col_n3, col_n4 = str_lit.columns(4)
@@ -1319,7 +1315,7 @@ def modale_crea_evento():
       n_nome = str_lit.text_input("🏷️ Nome Evento / Cliente *")
     with col_n2:
       n_data = str_lit.date_input(
-          "📅 Data Evento", value=date.today(), format="DD/MM/YYYY"
+          "📅 Data Evento", value=data_precompilata or date.today(), format="DD/MM/YYYY"
       )
     with col_n3:
       n_orario = str_lit.time_input("🕒 Orario evento")
@@ -1637,14 +1633,8 @@ if str_lit.session_state.utente_loggato is None:
         if trovato:
           str_lit.session_state.utente_loggato = trovato
           str_lit.session_state.area_selezionata = None
-          ruolo_login = trovato.get("ruolo", "")
-          ruolo_notifica = ruolo_login
-          notifiche_lette = set(str_lit.session_state.notifiche_lette_per_ruolo.get(ruolo_notifica, []))
-          str_lit.session_state.notifiche_da_mostrare = [
-              n for n in str_lit.session_state.notifiche_demo
-              if ruolo_notifica in n.get("destinatari", [])
-              and chiave_notifica(n) not in notifiche_lette
-          ]
+          # Le notifiche non vengono più mostrate dopo il login.
+          str_lit.session_state.notifiche_da_mostrare = []
           str_lit.toast(f"✅ Benvenuto, {trovato['nome']}!")
           str_lit.rerun()
         else:
@@ -1662,24 +1652,12 @@ else:
 
   puoi_gestire_eventi = is_admin or is_wedding
 
-  if str_lit.session_state.get("notifiche_da_mostrare"):
-    with str_lit.expander(f"🔔 Nuove notifiche ({len(str_lit.session_state.notifiche_da_mostrare)})", expanded=True):
-      for notifica in str_lit.session_state.notifiche_da_mostrare:
-        str_lit.info(notifica.get("testo", "Nuova notifica"))
-      if str_lit.button("Segna notifiche come lette", key="segna_notifiche_lette", type="primary"):
-        ruolo_corrente = ruolo_utente
-        lette = str_lit.session_state.notifiche_lette_per_ruolo.setdefault(ruolo_corrente, [])
-        for notifica in str_lit.session_state.notifiche_da_mostrare:
-          identificatore = chiave_notifica(notifica)
-          if identificatore not in lette:
-            lette.append(identificatore)
-        str_lit.session_state.notifiche_da_mostrare = []
-        str_lit.rerun()
-
   # Magazzino 1 e 2 consultano gli eventi dal calendario, senza una scheda
   # Catering separata; la guardia blocca anche eventuali link di sessione vecchi.
   if (is_magazzino or is_magazzino2) and str_lit.session_state.area_selezionata == "opzione_2":
     str_lit.session_state.area_selezionata = None
+  elif str_lit.session_state.area_selezionata == "opzione_2":
+    str_lit.session_state.area_selezionata = "opzione_noleggi"
 
   col_top1, col_top2 = str_lit.columns([8, 1])
   with col_top2:
@@ -1761,18 +1739,18 @@ else:
                 " 15px;'>🍽️</div>",
                 unsafe_allow_html=True,
             )
-          str_lit.markdown("### Catering ed Eventi")
+          str_lit.markdown("### Calendario Eventi")
           str_lit.markdown(
-              "<div class='card-desc'>Pianificazione eventi e reparti.</div>",
+              "<div class='card-desc'>Calendario e gestione degli eventi Catering.</div>",
               unsafe_allow_html=True,
           )
           if str_lit.button(
-              "Apri Catering",
+              "Apri Calendario Eventi",
               use_container_width=True,
               type="primary",
               key="btn_h_cat",
           ):
-            str_lit.session_state.area_selezionata = "opzione_2"
+            str_lit.session_state.area_selezionata = "opzione_noleggi"
             str_lit.rerun()
             str_lit.stop()
 
@@ -1902,7 +1880,7 @@ else:
               str_lit.session_state.noleggio_demo_crea_data = None
               str_lit.session_state.noleggio_demo_giorno_selezionato = date.today()
               str_lit.rerun()
-        elif is_wedding or is_cucina or is_sala:
+        elif is_wedding:
           with str_lit.container(border=True):
             if logo_catering_b64:
               str_lit.markdown(
@@ -1920,15 +1898,15 @@ else:
                   " margin-bottom: 15px;'>🍽️</div>",
                   unsafe_allow_html=True,
               )
-            str_lit.markdown("### Catering ed Eventi")
+            str_lit.markdown("### Calendario Eventi")
             str_lit.markdown(
                 "<div class='card-desc'>Pianificazione eventi e reparti.</div>",
                 unsafe_allow_html=True,
             )
             if str_lit.button(
-                "Apri Catering", use_container_width=True, type="primary"
+                "Apri Calendario Eventi", use_container_width=True, type="primary"
             ):
-              str_lit.session_state.area_selezionata = "opzione_2"
+              str_lit.session_state.area_selezionata = "opzione_noleggi"
               str_lit.rerun()
               str_lit.stop()
 
