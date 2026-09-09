@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, time
 import calendar
 import base64
 from io import BytesIO
@@ -824,6 +824,19 @@ def selettore_data_italiano(etichetta, valore, prefisso):
   giorno = min(giorno, ultimo_giorno)
   return date(anno, mese, giorno)
 
+
+def selettore_orario_italiano(etichetta, valore, prefisso):
+  """Selettore orario compatto, coerente con le tendine della data."""
+  valore = valore if isinstance(valore, time) else datetime.strptime(str(valore or "12:00")[:5], "%H:%M").time()
+  str_lit.markdown(f"**{etichetta}**")
+  col_ora, col_minuto = str_lit.columns(2)
+  with col_ora:
+    ora = str_lit.selectbox("Ore", list(range(24)), index=valore.hour, format_func=lambda x: f"{x:02d}", key=f"{prefisso}_ore", label_visibility="collapsed")
+  with col_minuto:
+    minuti = [0, 15, 30, 45]
+    minuto = str_lit.selectbox("Minuti", minuti, index=minuti.index((valore.minute // 15) * 15), format_func=lambda x: f"{x:02d}", key=f"{prefisso}_minuti", label_visibility="collapsed")
+  return time(ora, minuto)
+
 @str_lit.dialog("Nuovo Noleggio Confermato", width="large")
 def modale_crea_noleggio_demo(data_selezionata):
   str_lit.write(f"Data selezionata: **{data_selezionata.strftime('%d/%m/%Y')}**")
@@ -1365,8 +1378,7 @@ def modale_crea_evento(data_precompilata=None):
     with col_ndata:
       n_data = selettore_data_italiano("📅 Data Evento", data_precompilata or date.today(), "crea_catering_data_evento")
     with col_nora:
-      str_lit.markdown("**🕒 Orario evento**")
-      n_orario = str_lit.time_input("Orario evento", key="crea_catering_orario_evento", label_visibility="collapsed")
+      n_orario = selettore_orario_italiano("🕒 Orario evento", time(12, 0), "crea_catering_orario_evento")
 
     col_p1, col_p2, col_p3 = str_lit.columns(3)
     with col_p1:
@@ -1497,8 +1509,7 @@ def modale_modifica_evento(idx_ev):
       m_loc = str_lit.text_input("Location", value=ev_mod.get("location", ""))
     col_mora, col_mosp = str_lit.columns(2)
     with col_mora:
-      str_lit.markdown("**🕒 Orario evento**")
-      m_orario = str_lit.time_input("Orario evento", value=orario_per_widget(ev_mod), key=f"modifica_catering_orario_{idx_ev}", label_visibility="collapsed")
+      m_orario = selettore_orario_italiano("🕒 Orario evento", orario_per_widget(ev_mod), f"modifica_catering_orario_{idx_ev}")
     with col_mosp:
       str_lit.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
 
