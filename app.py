@@ -1016,18 +1016,24 @@ def mostra_noleggi_demo():
   with col_anno:
     anno = str_lit.selectbox("Anno calendario", list(range(2025, 2036)), index=list(range(2025, 2036)).index(str_lit.session_state.noleggio_demo_anno), key="noleggio_anno_select")
 
-  if puo_creare_noleggio or puo_creare_evento_catering:
-    azione_noleggio, azione_catering = str_lit.columns(2 if puo_creare_noleggio and puo_creare_evento_catering else 1)
-    if puo_creare_noleggio:
-      with azione_noleggio:
-        if str_lit.button("＋ Crea nuovo noleggio", type="primary", use_container_width=True, key="calendario_crea_noleggio_full"):
-          str_lit.session_state.noleggio_demo_crea_data = str_lit.session_state.get("noleggio_demo_giorno_selezionato", date(int(anno), int(mese), 1))
-          str_lit.session_state.noleggio_demo_modifica = None
-          str_lit.rerun()
-    if puo_creare_evento_catering:
-      with azione_catering:
-        if str_lit.button("＋ Crea evento Catering", use_container_width=True, key="calendario_crea_catering_full"):
-          modale_crea_evento(str_lit.session_state.get("noleggio_demo_giorno_selezionato", date(int(anno), int(mese), 1)))
+  if puo_creare_noleggio and puo_creare_evento_catering:
+    azione_noleggio, azione_catering = str_lit.columns(2)
+    with azione_noleggio:
+      if str_lit.button("＋ Crea nuovo noleggio", type="primary", use_container_width=True, key="calendario_crea_noleggio_full"):
+        str_lit.session_state.noleggio_demo_crea_data = str_lit.session_state.get("noleggio_demo_giorno_selezionato", date(int(anno), int(mese), 1))
+        str_lit.session_state.noleggio_demo_modifica = None
+        str_lit.rerun()
+    with azione_catering:
+      if str_lit.button("＋ Crea evento Catering", use_container_width=True, key="calendario_crea_catering_full"):
+        modale_crea_evento(str_lit.session_state.get("noleggio_demo_giorno_selezionato", date(int(anno), int(mese), 1)))
+  elif puo_creare_noleggio:
+    if str_lit.button("＋ Crea nuovo noleggio", type="primary", use_container_width=True, key="calendario_crea_noleggio_full"):
+      str_lit.session_state.noleggio_demo_crea_data = str_lit.session_state.get("noleggio_demo_giorno_selezionato", date(int(anno), int(mese), 1))
+      str_lit.session_state.noleggio_demo_modifica = None
+      str_lit.rerun()
+  elif puo_creare_evento_catering:
+    if str_lit.button("＋ Crea evento Catering", use_container_width=True, key="calendario_crea_catering_full"):
+      modale_crea_evento(str_lit.session_state.get("noleggio_demo_giorno_selezionato", date(int(anno), int(mese), 1)))
 
   str_lit.markdown("""
   <style>
@@ -1682,7 +1688,7 @@ else:
     )
 
     if is_admin:
-      c1, c2, c3, c4 = str_lit.columns(4)
+      c1, c2, c3, c4, c5 = str_lit.columns(5)
       with c1:
         with str_lit.container(border=True):
           if logo_noleggio_b64:
@@ -1701,13 +1707,13 @@ else:
                 " 15px;'>📦</div>",
                 unsafe_allow_html=True,
             )
-          str_lit.markdown("### Magazzino & Noleggio")
+          str_lit.markdown("### Inventario")
           str_lit.markdown(
               "<div class='card-desc'>Gestione scorte e codici QR.</div>",
               unsafe_allow_html=True,
           )
           if str_lit.button(
-              "Apri Magazzino",
+              "Apri Inventario",
               use_container_width=True,
               type="primary",
               key="btn_h_mag",
@@ -1774,34 +1780,10 @@ else:
 
       with c4:
         with str_lit.container(border=True):
-          str_lit.markdown(
-              "<div style='height: 100px; display: flex; align-items: center;"
-              " justify-content: center; font-size: 3rem; margin-bottom:"
-              " 15px;'>👥</div>",
-              unsafe_allow_html=True,
-          )
-          str_lit.markdown("### Sistema Ruoli")
-          str_lit.markdown(
-              "<div class='card-desc'>Configurazione utenti autorizzati.</div>",
-              unsafe_allow_html=True,
-          )
-          if str_lit.button(
-              "Apri Ruoli",
-              use_container_width=True,
-              type="primary",
-              key="btn_h_ruoli",
-          ):
-            str_lit.session_state.area_selezionata = "opzione_3"
-            str_lit.rerun()
-            str_lit.stop()
-      # Nuova voce aggiunta senza modificare le card esistenti.
-      c_noleggi, _, _, _ = str_lit.columns(4)
-      with c_noleggi:
-        with str_lit.container(border=True):
           str_lit.markdown("<div style='height: 100px; display: flex; align-items: center; justify-content: center; font-size: 3rem; margin-bottom: 15px;'>📅</div>", unsafe_allow_html=True)
-          str_lit.markdown("### Noleggi Confermati")
-          str_lit.markdown("<div class='card-desc'>Calendario dei noleggi e degli eventi.</div>", unsafe_allow_html=True)
-          if str_lit.button("Apri Noleggi", use_container_width=True, type="primary", key="btn_h_noleggi_admin"):
+          str_lit.markdown("### Calendario Noleggi")
+          str_lit.markdown("<div class='card-desc'>Calendario dei noleggi.</div>", unsafe_allow_html=True)
+          if str_lit.button("Apri Calendario Noleggi", use_container_width=True, type="primary", key="btn_h_noleggi_admin_riga"):
             str_lit.session_state.area_selezionata = "opzione_noleggi"
             str_lit.session_state.tipo_calendario = "noleggi"
             str_lit.session_state.noleggio_demo_mese = date.today().month
@@ -1810,7 +1792,17 @@ else:
             str_lit.session_state.noleggio_demo_crea_data = None
             str_lit.session_state.noleggio_demo_giorno_selezionato = date.today()
             str_lit.rerun()
-      
+
+      with c5:
+        with str_lit.container(border=True):
+          str_lit.markdown("<div style='height: 100px; display: flex; align-items: center; justify-content: center; font-size: 3rem; margin-bottom: 15px;'>👥</div>", unsafe_allow_html=True)
+          str_lit.markdown("### Sistema Ruoli")
+          str_lit.markdown("<div class='card-desc'>Configurazione utenti autorizzati.</div>", unsafe_allow_html=True)
+          if str_lit.button("Apri Ruoli", use_container_width=True, type="primary", key="btn_h_ruoli"):
+            str_lit.session_state.area_selezionata = "opzione_3"
+            str_lit.rerun()
+            str_lit.stop()
+
     else:
       # Il Magazzino usa due card: Magazzino e Calendario. Gli altri reparti
       # mantengono la disposizione a tre colonne prevista dalla home.
@@ -1837,13 +1829,13 @@ else:
                   " margin-bottom: 15px;'>📦</div>",
                   unsafe_allow_html=True,
               )
-            str_lit.markdown("### Magazzino")
+            str_lit.markdown("### Inventario")
             str_lit.markdown(
                 "<div class='card-desc'>Gestione scorte e codici QR.</div>",
                 unsafe_allow_html=True,
             )
             if str_lit.button(
-                "Apri Magazzino", use_container_width=True, type="primary"
+                "Apri Inventario", use_container_width=True, type="primary"
             ):
               str_lit.session_state.area_selezionata = "opzione_1"
               str_lit.rerun()
@@ -1925,7 +1917,7 @@ else:
 
     elif str_lit.session_state.area_selezionata == "opzione_1":
       
-      str_lit.subheader("📦 Magazzino & Noleggio Attrezzature")
+      str_lit.subheader("📦 Inventario")
 
       col_btn_nuovo, col_cat_filtro, col_search = str_lit.columns([1, 1.5, 2.5])
       with col_btn_nuovo:
