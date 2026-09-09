@@ -1047,13 +1047,17 @@ def mostra_noleggi_demo():
     azioni.append("catering")
   if azioni:
     str_lit.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    a1, a2 = str_lit.columns(2 if len(azioni) == 2 else 1)
+    if len(azioni) == 2:
+      a1, a2 = str_lit.columns(2)
+    else:
+      a1 = str_lit.container()
+      a2 = None
     if "noleggio" in azioni:
       with a1:
         if str_lit.button("＋ Nuovo noleggio", type="primary", use_container_width=True, key="planner_new_rental"):
           modale_crea_noleggio_demo(str_lit.session_state.get("noleggio_demo_giorno_selezionato", date(int(anno), int(mese), 1)))
     if "catering" in azioni:
-      with (a2 if len(azioni) == 2 else a1):
+      with (a2 if a2 is not None else a1):
         if str_lit.button("＋ Nuovo Catering", type="primary", use_container_width=True, key="planner_new_catering"):
           modale_crea_evento(str_lit.session_state.get("noleggio_demo_giorno_selezionato", date(int(anno), int(mese), 1)))
 
