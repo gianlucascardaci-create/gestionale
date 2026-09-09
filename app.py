@@ -1034,12 +1034,14 @@ def mostra_noleggi_demo():
     str_lit.session_state.eventi_caricati = True
 
   mesi = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"]
-  str_lit.markdown(f"<div class='planner-header'><div><div class='planner-kicker'>{'CALENDARIO EVENTI' if solo_catering else 'PIANIFICAZIONE NOLEGGI'}</div><h1>{'Calendario Eventi' if solo_catering else 'Calendario Noleggi'}</h1><p>Seleziona una giornata per aprire direttamente l'evento.</p></div></div>", unsafe_allow_html=True)
+  str_lit.markdown(f"<div class='planner-header'><div><div class='planner-kicker'>{'PIANIFICAZIONE EVENTI' if solo_catering else 'PIANIFICAZIONE NOLEGGI'}</div><h1>{'Calendario Eventi' if solo_catering else 'Calendario Noleggi'}</h1></div></div>", unsafe_allow_html=True)
   col_mese, col_anno = str_lit.columns([1.4, 1.0])
   with col_mese:
-    mese = str_lit.selectbox("Mese", list(range(1, 13)), index=str_lit.session_state.noleggio_demo_mese - 1, format_func=lambda m: mesi[m - 1], key="noleggio_mese_select")
+    str_lit.caption("Mese")
+    mese = str_lit.selectbox("Mese", list(range(1, 13)), index=str_lit.session_state.noleggio_demo_mese - 1, format_func=lambda m: mesi[m - 1], key="noleggio_mese_select", label_visibility="collapsed")
   with col_anno:
-    anno = str_lit.selectbox("Anno", list(range(2025, 2036)), index=list(range(2025, 2036)).index(str_lit.session_state.noleggio_demo_anno), key="noleggio_anno_select")
+    str_lit.caption("Anno")
+    anno = str_lit.selectbox("Anno", list(range(2025, 2036)), index=list(range(2025, 2036)).index(str_lit.session_state.noleggio_demo_anno), key="noleggio_anno_select", label_visibility="collapsed")
   azioni = []
   if puo_creare_noleggio:
     azioni.append("noleggio")
@@ -1054,18 +1056,18 @@ def mostra_noleggi_demo():
       a2 = None
     if "noleggio" in azioni:
       with a1:
-        if str_lit.button("＋ Nuovo noleggio", type="primary", use_container_width=True, key="planner_new_rental"):
+        if str_lit.button("＋ Crea nuovo noleggio", type="primary", use_container_width=True, key="planner_new_rental"):
           modale_crea_noleggio_demo(str_lit.session_state.get("noleggio_demo_giorno_selezionato", date(int(anno), int(mese), 1)))
     if "catering" in azioni:
       with (a2 if a2 is not None else a1):
-        if str_lit.button("＋ Nuovo evento", type="primary", use_container_width=True, key="planner_new_catering"):
+        if str_lit.button("＋ Crea nuovo evento", type="primary", use_container_width=True, key="planner_new_catering"):
           modale_crea_evento(str_lit.session_state.get("noleggio_demo_giorno_selezionato", date(int(anno), int(mese), 1)))
 
   str_lit.markdown("""
   <style>
-  .planner-header {background:linear-gradient(135deg,#f8fbff 0%,#eef6ff 100%); border:1px solid #d8e8f8; border-radius:14px; padding:12px 18px 10px; margin:4px 0 8px;}
-  .planner-kicker {font-size:.68rem; letter-spacing:.16em; font-weight:800; color:#667085; margin-bottom:5px;}
-  .planner-header h1 {font-size:1.45rem; color:#102a43; margin:0; letter-spacing:-.03em;}
+  .planner-header {background:linear-gradient(135deg,#f8fbff 0%,#eef6ff 100%); border:1px solid #d8e8f8; border-radius:10px; padding:7px 13px 6px; margin:2px 0 5px;}
+  .planner-kicker {font-size:.56rem; letter-spacing:.13em; font-weight:800; color:#667085; margin-bottom:2px;}
+  .planner-header h1 {font-size:1.08rem; color:#102a43; margin:0; letter-spacing:-.02em;}
   .planner-header p {font-size:.76rem; color:#627d98; margin:3px 0 0;}
   .planner-week {display:grid; grid-template-columns:repeat(7,1fr); gap:5px; margin:5px 0 3px;}
   .planner-week span {text-align:center; font-size:.7rem; letter-spacing:.12em; font-weight:800; color:#829ab1; text-transform:uppercase;}
@@ -1700,7 +1702,7 @@ else:
   elif str_lit.session_state.area_selezionata == "opzione_2":
     str_lit.session_state.area_selezionata = "opzione_noleggi"
 
-  col_top1, col_top2 = str_lit.columns([8, 1])
+  col_top1, col_top2 = str_lit.columns([7.2, 1.45])
   with col_top2:
     if str_lit.button("⎋ Esci", key="btn_esci_app", use_container_width=True, type="secondary"):
       str_lit.session_state.utente_loggato = None
@@ -1947,12 +1949,14 @@ else:
               str_lit.stop()
 
   else:
-    if str_lit.button("← Torna alla Home", key="btn_torna_home", type="secondary", use_container_width=True):
-      str_lit.session_state.area_selezionata = None
-      str_lit.session_state.modale_prodotto = None
-      str_lit.query_params.clear()
-      str_lit.rerun()
-      str_lit.stop()
+    col_home, _ = str_lit.columns([1.45, 7.2])
+    with col_home:
+      if str_lit.button("← Torna alla Home", key="btn_torna_home", type="secondary", use_container_width=True):
+        str_lit.session_state.area_selezionata = None
+        str_lit.session_state.modale_prodotto = None
+        str_lit.query_params.clear()
+        str_lit.rerun()
+        str_lit.stop()
 
     if str_lit.session_state.area_selezionata == "opzione_noleggi":
       mostra_noleggi_demo()
