@@ -834,48 +834,81 @@ def mostra_noleggi_demo():
     anno = str_lit.selectbox("Anno calendario", list(range(2025, 2036)), index=list(range(2025, 2036)).index(str_lit.session_state.noleggio_demo_anno), key="noleggio_anno_select")
   str_lit.markdown("""
   <style>
-  .noleggi-legend {display:flex; gap:18px; align-items:center; margin:12px 0 16px; color:#475467; font-size:.9rem;}
-  .legend-dot {display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px;}
-  .noleggi-day-head {text-align:center; color:#667085; font-size:.82rem; font-weight:700; padding:7px 0; text-transform:uppercase; letter-spacing:.04em;}
-  .noleggi-day-box {min-height:142px; border:1px solid #d9e2ec; border-radius:10px; background:#fff; padding:8px; box-shadow:0 1px 2px rgba(16,24,40,.04);}
-  .noleggi-day-box:hover {border-color:#8fb8df; box-shadow:0 3px 9px rgba(0,86,179,.10);}
-  .noleggi-day-muted {background:#f8fafc; border-color:#eef2f6; min-height:142px; border-radius:10px;}
-  .noleggi-day-number {font-size:1rem; font-weight:800; color:#344054; margin-bottom:7px;}
-  .noleggi-empty {color:#98a2b3; font-size:.72rem; padding-top:7px;}
+  .noleggi-layout-title {font-size:1rem; font-weight:800; color:#344054; margin:8px 0 10px;}
+  .noleggi-week {display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-bottom:6px;}
+  .noleggi-weekday {text-align:center; color:#667085; font-size:.72rem; font-weight:800; letter-spacing:.04em; padding:6px 0;}
+  .noleggi-month-note {color:#667085; font-size:.82rem; margin:0 0 12px;}
+  .noleggi-legend {display:flex; gap:16px; color:#667085; font-size:.78rem; margin:0 0 12px;}
+  .noleggi-dot {display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px;}
+  .noleggi-side-panel {background:#f8fafc; border:1px solid #d9e2ec; border-radius:12px; padding:18px; min-height:500px;}
+  .noleggi-side-title {font-size:1.2rem; font-weight:800; color:#1d2939; margin-bottom:3px;}
+  .noleggi-side-subtitle {font-size:.82rem; color:#667085; margin-bottom:16px;}
+  .noleggi-day-muted {height:70px; background:#f8fafc; border:1px solid #eef2f6; border-radius:8px;}
   </style>
-  <div class='noleggi-legend'>
-    <span><i class='legend-dot' style='background:#0056b3'></i>Confermato</span>
-    <span><i class='legend-dot' style='background:#e7a928'></i>Non confermato</span>
-  </div>
   """, unsafe_allow_html=True)
-  for col, nome_giorno in zip(str_lit.columns(7), ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"]):
-    with col:
-      str_lit.markdown(f"<div class='noleggi-day-head'>{nome_giorno}</div>", unsafe_allow_html=True)
-  for settimana in calendar.Calendar(firstweekday=0).monthdatescalendar(int(anno), int(mese)):
-    colonne = str_lit.columns(7, gap="small")
-    for colonna, giorno in zip(colonne, settimana):
-      with colonna:
-        if giorno.month != int(mese):
-          st_markup = "<div class='noleggi-day-muted'></div>"
-          str_lit.markdown(st_markup, unsafe_allow_html=True)
-          continue
-        eventi_giorno = [n for n in str_lit.session_state.noleggi_demo if n["inizio"].date() <= giorno <= n["fine"].date()]
-        with str_lit.container(border=True):
-          str_lit.markdown(f"<div class='noleggi-day-number'>{giorno.day}</div>", unsafe_allow_html=True)
-          if str_lit.button("＋ Nuovo", key=f"demo_giorno_{giorno}", use_container_width=True):
-            str_lit.session_state.noleggio_demo_crea_data = giorno
+
+  if "noleggio_demo_giorno_selezionato" not in str_lit.session_state:
+    str_lit.session_state.noleggio_demo_giorno_selezionato = date(int(anno), int(mese), 1)
+  giorno_selezionato = str_lit.session_state.noleggio_demo_giorno_selezionato
+  if giorno_selezionato.year != int(anno) or giorno_selezionato.month != int(mese):
+    giorno_selezionato = date(int(anno), int(mese), 1)
+    str_lit.session_state.noleggio_demo_giorno_selezionato = giorno_selezionato
+
+  calendario_col, pannello_col = str_lit.columns([1.55, 1], gap="large")
+  with calendario_col:
+    str_lit.markdown("<div class='noleggi-layout-title'>Calendario mensile</div>", unsafe_allow_html=True)
+    str_lit.markdown(f"<div class='noleggi-month-note'>Seleziona un giorno per vedere i noleggi nel pannello laterale.</div>", unsafe_allow_html=True)
+    str_lit.markdown("<div class='noleggi-legend'><span><i class='noleggi-dot' style='background:#0056b3'></i>Confermato</span><span><i class='noleggi-dot' style='background:#e7a928'></i>Non confermato</span></div>", unsafe_allow_html=True)
+    intestazioni = str_lit.columns(7, gap="small")
+    for col, nome_giorno in zip(intestazioni, ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"]):
+      with col:
+        str_lit.markdown(f"<div class='noleggi-weekday'>{nome_giorno}</div>", unsafe_allow_html=True)
+    for settimana in calendar.Calendar(firstweekday=0).monthdatescalendar(int(anno), int(mese)):
+      colonne = str_lit.columns(7, gap="small")
+      for colonna, giorno in zip(colonne, settimana):
+        with colonna:
+          if giorno.month != int(mese):
+            str_lit.markdown("<div class='noleggi-day-muted'></div>", unsafe_allow_html=True)
+            continue
+          eventi_giorno = [n for n in str_lit.session_state.noleggi_demo if n["inizio"].date() <= giorno <= n["fine"].date()]
+          selezionato = giorno == giorno_selezionato
+          etichetta = f"● {giorno.day}" if selezionato else str(giorno.day)
+          if str_lit.button(etichetta, key=f"demo_giorno_{giorno}", use_container_width=True):
+            str_lit.session_state.noleggio_demo_giorno_selezionato = giorno
+            str_lit.session_state.noleggio_demo_crea_data = None
             str_lit.session_state.noleggio_demo_modifica = None
             str_lit.rerun()
-          for noleggio in eventi_giorno:
-            icona = "🔵" if noleggio["stato"] == "confermato" else "🟠"
+          for indice, noleggio in enumerate(eventi_giorno[:3]):
+            colore = "#0056b3" if noleggio["stato"] == "confermato" else "#e7a928"
             prefisso = "↳ " if giorno != noleggio["inizio"].date() else ""
-            testo = f"{icona} {prefisso}{noleggio['titolo']}"
-            if str_lit.button(testo, key=f"demo_noleggio_{noleggio['id']}_{giorno}", use_container_width=True):
-              str_lit.session_state.noleggio_demo_modifica = noleggio["id"]
-              str_lit.session_state.noleggio_demo_crea_data = None
-              str_lit.rerun()
-          if not eventi_giorno:
-            str_lit.markdown("<div class='noleggi-empty'>Nessun noleggio</div>", unsafe_allow_html=True)
+            str_lit.markdown(f"<div style='height:5px;background:{colore};border-radius:4px;margin:3px 2px' title='{prefisso}{noleggio['titolo']}'></div>", unsafe_allow_html=True)
+          if len(eventi_giorno) > 3:
+            str_lit.caption(f"+{len(eventi_giorno)-3}")
+
+  with pannello_col:
+    eventi_selezionati = [n for n in str_lit.session_state.noleggi_demo if n["inizio"].date() <= giorno_selezionato <= n["fine"].date()]
+    with str_lit.container(border=True):
+      str_lit.markdown(f"<div class='noleggi-side-title'>{giorno_selezionato.strftime('%A %d %B %Y').capitalize()}</div>", unsafe_allow_html=True)
+      str_lit.markdown("<div class='noleggi-side-subtitle'>Noleggi presenti nella giornata selezionata</div>", unsafe_allow_html=True)
+      if str_lit.button("＋ Crea nuovo noleggio", type="primary", use_container_width=True, key="demo_crea_noleggio_laterale"):
+        str_lit.session_state.noleggio_demo_crea_data = giorno_selezionato
+        str_lit.session_state.noleggio_demo_modifica = None
+        str_lit.rerun()
+      str_lit.markdown("---")
+      if not eventi_selezionati:
+        str_lit.info("Nessun noleggio in questa giornata. Puoi crearne uno con il pulsante sopra.")
+      else:
+        for noleggio in eventi_selezionati:
+          colore = "🔵" if noleggio["stato"] == "confermato" else "🟠"
+          orario = f"{noleggio['inizio'].strftime('%H:%M')} – {noleggio['fine'].strftime('%H:%M')}"
+          if noleggio["inizio"].date() != giorno_selezionato:
+            orario = f"In corso · fino alle {noleggio['fine'].strftime('%H:%M')}"
+          if str_lit.button(f"{colore} {noleggio['titolo']}\n{orario}", key=f"demo_pannello_noleggio_{noleggio['id']}", use_container_width=True):
+            str_lit.session_state.noleggio_demo_modifica = noleggio["id"]
+            str_lit.session_state.noleggio_demo_crea_data = None
+            str_lit.rerun()
+          str_lit.caption(f"{noleggio['location']} · {noleggio['referente']}")
+
   if str_lit.session_state.get("noleggio_demo_crea_data"):
     modale_crea_noleggio_demo(str_lit.session_state.noleggio_demo_crea_data)
   if str_lit.session_state.get("noleggio_demo_modifica"):
