@@ -845,7 +845,7 @@ def mostra_noleggi_demo():
   .noleggi-side-subtitle {font-size:.82rem; color:#667085; margin-bottom:16px;}
   .noleggi-day-muted {height:70px; background:#f8fafc; border:1px solid #eef2f6; border-radius:8px;}
   .noleggi-dots {display:flex; justify-content:center; gap:4px; min-height:12px; padding:4px 0 2px;}
-  .noleggi-event-dot {display:inline-block; width:6px; height:6px; border-radius:50%; margin:0 2px;}
+  .noleggi-event-dot {display:inline-block; width:10px; height:10px; border-radius:50%; margin:0 2px;}
   .noleggi-day-count {font-size:.68rem; color:#667085; margin-left:3px;}
   </style>
   """, unsafe_allow_html=True)
