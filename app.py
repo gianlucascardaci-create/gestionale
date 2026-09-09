@@ -744,6 +744,13 @@ if "noleggio_demo_mese" not in str_lit.session_state:
   str_lit.session_state.noleggio_demo_mese = 6
 if "noleggio_demo_anno" not in str_lit.session_state:
   str_lit.session_state.noleggio_demo_anno = 2026
+if "evento_catering_demo_iniziale" not in str_lit.session_state:
+  str_lit.session_state.evento_catering_demo_iniziale = {
+      "nome_evento": "Matrimonio Villa Aurora",
+      "data": "2026-06-18",
+      "location": "Villa Aurora",
+      "ospiti": 150,
+  }
 
 @str_lit.dialog("Nuovo Noleggio Confermato", width="large")
 def modale_crea_noleggio_demo(data_selezionata):
@@ -817,6 +824,27 @@ def modale_modifica_noleggio_demo(noleggio_id):
       str_lit.write(f"DDT: `{noleggio['ddt']}`")
       str_lit.write(f"Vario: `{noleggio['vario']}`")
     salva = str_lit.form_submit_button("Salva modifiche", type="primary", use_container_width=True, disabled=not puo_modificare)
+  str_lit.markdown("#### Gestione allegati")
+  allegati_visibili = []
+  if ruolo_corrente in {"Amministratore", "Magazzino2"}:
+    allegati_visibili.append(("Bolla con prezzo", "bolla"))
+  if ruolo_corrente in {"Amministratore", "Magazzino2", "Magazzino"}:
+    allegati_visibili.extend([("DDT", "ddt"), ("Vario", "vario")])
+  for etichetta_allegato, campo_allegato in allegati_visibili:
+    nome_allegato = noleggio.get(campo_allegato) or "Nessun file"
+    col_file, col_scarica, col_elimina = str_lit.columns([2.2, 1, 1])
+    with col_file:
+      str_lit.write(f"**{etichetta_allegato}:** `{nome_allegato}`")
+    if nome_allegato != "Nessun file":
+      with col_scarica:
+        str_lit.download_button("⬇️ Scarica", data=f"Anteprima allegato demo: {nome_allegato}".encode("utf-8"), file_name=nome_allegato, mime="application/octet-stream", key=f"scarica_demo_{noleggio_id}_{campo_allegato}", use_container_width=True)
+      if puo_modificare:
+        with col_elimina:
+          if str_lit.button("🗑️ Elimina", key=f"elimina_demo_{noleggio_id}_{campo_allegato}", use_container_width=True):
+            noleggio[campo_allegato] = "Nessun file"
+            str_lit.toast(f"{etichetta_allegato} eliminata dalla demo.")
+            str_lit.rerun()
+
   if salva:
     noleggio.update({"titolo": titolo, "inizio": datetime.combine(data_inizio, ora_inizio), "fine": datetime.combine(data_fine, ora_fine), "location": location, "referente": referente, "telefono": telefono, "note": note, "stato": "confermato" if stato == "Confermato" else "non confermato"})
     str_lit.session_state.noleggio_demo_modifica = None
@@ -857,11 +885,26 @@ def mostra_noleggi_demo():
     giorno_selezionato = date(int(anno), int(mese), 1)
     str_lit.session_state.noleggio_demo_giorno_selezionato = giorno_selezionato
 
+  eventi_catering_calendario = [str_lit.session_state.evento_catering_demo_iniziale]
+  for evento_catering in str_lit.session_state.get("eventi_catering", []):
+    if evento_catering.get("nome_evento"):
+      eventi_catering_calendario.append(evento_catering)
+
+  def data_catering(evento):
+    valore = str(evento.get("data", ""))
+    try:
+      return date.fromisoformat(valore[:10])
+    except ValueError:
+      try:
+        return datetime.strptime(valore, "%d/%m/%Y").date()
+      except ValueError:
+        return None
+
   calendario_col, pannello_col = str_lit.columns([1.55, 1], gap="large")
   with calendario_col:
     str_lit.markdown("<div class='noleggi-layout-title'>Calendario mensile</div>", unsafe_allow_html=True)
     str_lit.markdown(f"<div class='noleggi-month-note'>Seleziona un giorno per vedere i noleggi nel pannello laterale.</div>", unsafe_allow_html=True)
-    str_lit.markdown("<div class='noleggi-legend'><span><i class='noleggi-dot' style='background:#0056b3'></i>Confermato</span><span><i class='noleggi-dot' style='background:#e7a928'></i>Non confermato</span></div>", unsafe_allow_html=True)
+    str_lit.markdown("<div class='noleggi-legend'><span><i class='noleggi-dot' style='background:#0056b3'></i>Confermato</span><span><i class='noleggi-dot' style='background:#e7a928'></i>Non confermato</span><span><i class='noleggi-dot' style='background:#4b9f9a'></i>Catering</span></div>", unsafe_allow_html=True)
     intestazioni = str_lit.columns(7, gap="small")
     for col, nome_giorno in zip(intestazioni, ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"]):
       with col:
@@ -874,6 +917,7 @@ def mostra_noleggi_demo():
             str_lit.markdown("<div class='noleggi-day-muted'></div>", unsafe_allow_html=True)
             continue
           eventi_giorno = [n for n in str_lit.session_state.noleggi_demo if n["inizio"].date() <= giorno <= n["fine"].date()]
+          catering_giorno = [e for e in eventi_catering_calendario if data_catering(e) == giorno]
           selezionato = giorno == giorno_selezionato
           with str_lit.container(border=True):
             etichetta = f"● {giorno.day}" if selezionato else str(giorno.day)
@@ -883,15 +927,19 @@ def mostra_noleggi_demo():
               str_lit.session_state.noleggio_demo_modifica = None
               str_lit.rerun()
             pallini_html = []
-            for noleggio in eventi_giorno[:5]:
+            for noleggio in eventi_giorno[:4]:
               colore = "#0056b3" if noleggio["stato"] == "confermato" else "#e7a928"
               pallini_html.append(f"<span class='noleggi-event-dot' style='background:{colore}' title='{noleggio['titolo']}'></span>")
-            extra = f"<span class='noleggi-day-count'>+{len(eventi_giorno)-5}</span>" if len(eventi_giorno) > 5 else ""
+            for evento_catering in catering_giorno[:2]:
+              pallini_html.append(f"<span class='noleggi-event-dot' style='background:#4b9f9a' title='Catering: {evento_catering.get('nome_evento', 'Evento Catering')}'></span>")
+            totale_eventi = len(eventi_giorno) + len(catering_giorno)
+            extra = f"<span class='noleggi-day-count'>+{totale_eventi-5}</span>" if totale_eventi > 5 else ""
             contenuto_pallini = ''.join(pallini_html) if pallini_html else "<span class='noleggi-day-count'>·</span>"
             str_lit.markdown(f"<div class='noleggi-dots'>{contenuto_pallini}{extra}</div>", unsafe_allow_html=True)
 
   with pannello_col:
     eventi_selezionati = [n for n in str_lit.session_state.noleggi_demo if n["inizio"].date() <= giorno_selezionato <= n["fine"].date()]
+    catering_selezionati = [e for e in eventi_catering_calendario if data_catering(e) == giorno_selezionato]
     with str_lit.container(border=True):
       nomi_giorni = ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"]
       nomi_mesi = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"]
@@ -903,9 +951,12 @@ def mostra_noleggi_demo():
         str_lit.session_state.noleggio_demo_modifica = None
         str_lit.rerun()
       str_lit.markdown("---")
-      if not eventi_selezionati:
-        str_lit.info("Nessun noleggio in questa giornata. Puoi crearne uno con il pulsante sopra.")
+      if not eventi_selezionati and not catering_selezionati:
+        str_lit.info("Nessun evento in questa giornata. Puoi creare un nuovo noleggio con il pulsante sopra.")
       else:
+        for evento_catering in catering_selezionati:
+          str_lit.markdown(f"**🟢 Catering — {evento_catering.get('nome_evento', 'Evento Catering')}**")
+          str_lit.caption(f"{evento_catering.get('location', 'Location non indicata')} · {evento_catering.get('ospiti', 0)} ospiti")
         for noleggio in eventi_selezionati:
           colore = "🔵" if noleggio["stato"] == "confermato" else "🟠"
           orario = f"{noleggio['inizio'].strftime('%H:%M')} – {noleggio['fine'].strftime('%H:%M')}"
