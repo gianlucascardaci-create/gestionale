@@ -585,7 +585,7 @@ def data_da_display_evento(evento):
 def orario_evento(evento):
   """Restituisce l'orario memorizzato nel campo data_display, se presente."""
   valore = str(evento.get("data_display") or "")
-  corrispondenza = re.search(r"(?:·|\s)([01]\d|2[0-3]):[0-5]\d\b", valore)
+  corrispondenza = re.search(r"(?:·|\s)((?:[01]\d|2[0-3]):[0-5]\d)\b", valore)
   return corrispondenza.group(1) if corrispondenza else ""
 
 
