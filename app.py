@@ -553,6 +553,10 @@ def genera_qrcode_img(testo):
 def parse_data_evento(d_str):
   if not d_str:
     return datetime(2026, 1, 1)
+  if isinstance(d_str, datetime):
+    return d_str
+  if isinstance(d_str, date):
+    return datetime.combine(d_str, datetime.min.time())
   for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
     try:
       return datetime.strptime(d_str.strip(), fmt)
@@ -794,13 +798,13 @@ def modale_crea_noleggio_demo(data_selezionata):
     titolo = str_lit.text_input("Nome del noleggio")
     col_a, col_b = str_lit.columns(2)
     with col_a:
-      data_inizio = str_lit.date_input("Data inizio", data_selezionata)
+      data_inizio = str_lit.date_input("Data inizio", data_selezionata, format="DD/MM/YYYY")
       ora_inizio = str_lit.time_input("Ora inizio")
       location = str_lit.text_input("Location")
       referente = str_lit.text_input("Persona di riferimento")
       telefono = str_lit.text_input("Numero di telefono")
     with col_b:
-      data_fine = str_lit.date_input("Data fine", data_selezionata)
+      data_fine = str_lit.date_input("Data fine", data_selezionata, format="DD/MM/YYYY")
       ora_fine = str_lit.time_input("Ora fine")
       stato = str_lit.selectbox("Stato", ["Confermato", "Non confermato"])
       note = str_lit.text_area("Note varie")
@@ -843,13 +847,13 @@ def modale_modifica_noleggio_demo(noleggio_id):
     titolo = str_lit.text_input("Nome del noleggio", noleggio["titolo"], disabled=not puo_modificare)
     col_a, col_b = str_lit.columns(2)
     with col_a:
-      data_inizio = str_lit.date_input("Data inizio", noleggio["inizio"].date(), disabled=not puo_modificare)
+      data_inizio = str_lit.date_input("Data inizio", noleggio["inizio"].date(), format="DD/MM/YYYY", disabled=not puo_modificare)
       ora_inizio = str_lit.time_input("Ora inizio", noleggio["inizio"].time(), disabled=not puo_modificare)
       location = str_lit.text_input("Location", noleggio["location"], disabled=not puo_modificare)
       referente = str_lit.text_input("Persona di riferimento", noleggio["referente"], disabled=not puo_modificare)
       telefono = str_lit.text_input("Numero di telefono", noleggio["telefono"], disabled=not puo_modificare)
     with col_b:
-      data_fine = str_lit.date_input("Data fine", noleggio["fine"].date(), disabled=not puo_modificare)
+      data_fine = str_lit.date_input("Data fine", noleggio["fine"].date(), format="DD/MM/YYYY", disabled=not puo_modificare)
       ora_fine = str_lit.time_input("Ora fine", noleggio["fine"].time(), disabled=not puo_modificare)
       stato = str_lit.selectbox("Stato", ["Confermato", "Non confermato"], index=0 if noleggio["stato"] == "confermato" else 1, disabled=not puo_modificare)
       note = str_lit.text_area("Note varie", noleggio["note"], disabled=not puo_modificare)
@@ -905,9 +909,23 @@ def modale_catering_da_calendario(evento):
   str_lit.markdown("---")
   str_lit.markdown("### Note per tutti")
   str_lit.info(evento.get("note_tutti") or "Nessuna nota per tutti.")
+  for indice, allegato in enumerate(evento.get("allegati_tutti") or []):
+    str_lit.download_button(
+        f"📥 Scarica allegato: {allegato.get('nome_file', 'Allegato')}",
+        data=base64.b64decode(allegato.get("dati_b64", "")),
+        file_name=allegato.get("nome_file", f"allegato_{indice}"),
+        key=f"calendario_tutti_{evento.get('id', evento.get('nome_evento', 'evento'))}_{indice}",
+    )
   if ruolo in {"Magazzino", "Magazzino2"}:
     str_lit.markdown("### Note per il magazzino")
     str_lit.info(evento.get("note_magazzino") or "Nessuna nota specifica per il magazzino.")
+    for indice, allegato in enumerate(evento.get("allegati_magazzino") or []):
+      str_lit.download_button(
+          f"📥 Scarica allegato magazzino: {allegato.get('nome_file', 'Allegato')}",
+          data=base64.b64decode(allegato.get("dati_b64", "")),
+          file_name=allegato.get("nome_file", f"allegato_magazzino_{indice}"),
+          key=f"calendario_magazzino_{evento.get('id', evento.get('nome_evento', 'evento'))}_{indice}",
+      )
 
 
 def mostra_noleggi_demo():
@@ -937,9 +955,10 @@ def mostra_noleggi_demo():
   .noleggi-day-muted {height:86px; background:#f8fafc; border:1px solid #eef2f6; border-radius:8px;}
   .noleggi-markers {display:flex; flex-wrap:wrap; justify-content:center; gap:3px; min-height:28px; padding:5px 1px 1px;}
   .noleggi-marker {display:inline-block; border-radius:999px; padding:3px 5px; color:white; font-size:.55rem; font-weight:800; line-height:1; letter-spacing:.03em; white-space:nowrap;}
-  .noleggi-marker-rental-confirmed {background:#0056b3;}
-  .noleggi-marker-rental-pending {background:#c87800;}
-  .noleggi-marker-catering {background:#7c3aed;}
+  .noleggi-event-bar {width:100%; overflow:hidden; text-overflow:ellipsis; border-radius:4px; padding:3px 5px; margin:2px 0; color:white; font-size:.57rem; font-weight:800; line-height:1.15; white-space:nowrap; text-align:left;}
+  .noleggi-event-bar-rental {background:#155eef;}
+  .noleggi-event-bar-pending {background:#eab308; color:#3b2f00;}
+  .noleggi-event-bar-catering {background:#166534;}
   .noleggi-day-empty {font-size:.72rem; color:#98a2b3; padding-top:5px;}
   </style>
   """, unsafe_allow_html=True)
@@ -970,8 +989,8 @@ def mostra_noleggi_demo():
   calendario_col, pannello_col = str_lit.columns([1.55, 1], gap="large")
   with calendario_col:
     str_lit.markdown("<div class='noleggi-layout-title'>Calendario mensile</div>", unsafe_allow_html=True)
-    str_lit.markdown(f"<div class='noleggi-month-note'>Ogni giorno usa etichette: <b>NOL.</b> per i noleggi e <b>CAT.</b> per gli eventi Catering.</div>", unsafe_allow_html=True)
-    str_lit.markdown("<div class='noleggi-legend'><span><i class='noleggi-dot' style='background:#0056b3'></i>Noleggio confermato</span><span><i class='noleggi-dot' style='background:#c87800'></i>Noleggio da confermare</span><span><i class='noleggi-dot' style='background:#7c3aed'></i>Evento Catering</span></div>", unsafe_allow_html=True)
+    str_lit.markdown(f"<div class='noleggi-month-note'>Le barre colorate dentro ogni giorno mostrano gli appuntamenti senza usare pallini ripetuti.</div>", unsafe_allow_html=True)
+    str_lit.markdown("<div class='noleggi-legend'><span><i class='noleggi-dot' style='background:#155eef'></i>Noleggio confermato</span><span><i class='noleggi-dot' style='background:#eab308'></i>Noleggio non confermato</span><span><i class='noleggi-dot' style='background:#166534'></i>Evento Catering</span></div>", unsafe_allow_html=True)
     intestazioni = str_lit.columns(7, gap="small")
     for col, nome_giorno in zip(intestazioni, ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"]):
       with col:
@@ -994,15 +1013,16 @@ def mostra_noleggi_demo():
               str_lit.session_state.noleggio_demo_modifica = None
               str_lit.session_state.evento_catering_demo_selezionato = None
               str_lit.rerun()
-            noleggi_confermati = sum(n.get("stato") == "confermato" for n in eventi_giorno)
-            noleggi_da_confermare = len(eventi_giorno) - noleggi_confermati
             marker_html = []
-            if noleggi_confermati:
-              marker_html.append(f"<span class='noleggi-marker noleggi-marker-rental-confirmed'>NOL. {noleggi_confermati}</span>")
-            if noleggi_da_confermare:
-              marker_html.append(f"<span class='noleggi-marker noleggi-marker-rental-pending'>NOL. {noleggi_da_confermare}</span>")
-            if catering_giorno:
-              marker_html.append(f"<span class='noleggi-marker noleggi-marker-catering'>CAT. {len(catering_giorno)}</span>")
+            for noleggio in eventi_giorno:
+              durata_giorni = (noleggio["fine"].date() - noleggio["inizio"].date()).days + 1
+              stato = noleggio.get("stato", "confermato")
+              if stato == "confermato":
+                marker_html.append(f"<div class='noleggi-event-bar noleggi-event-bar-rental' title='{noleggio.get('titolo', 'Noleggio')}'>NOL. · {durata_giorni}g</div>")
+              else:
+                marker_html.append(f"<div class='noleggi-event-bar noleggi-event-bar-pending' title='Noleggio non confermato'>NOL. · da confermare</div>")
+            for evento_catering in catering_giorno:
+              marker_html.append(f"<div class='noleggi-event-bar noleggi-event-bar-catering' title='Catering: {evento_catering.get('nome_evento', 'Evento Catering')}'>CAT. · {evento_catering.get('nome_evento', 'Catering')}</div>")
             contenuto_marker = "".join(marker_html) if marker_html else "<span class='noleggi-day-empty'>—</span>"
             str_lit.markdown(f"<div class='noleggi-markers'>{contenuto_marker}</div>", unsafe_allow_html=True)
 
@@ -1031,16 +1051,21 @@ def mostra_noleggi_demo():
           dettagli_orario = orario_evento(evento_catering) or "orario non indicato"
           str_lit.caption(f"{dettagli_orario} · {evento_catering.get('location', 'Location non indicata')} · {evento_catering.get('ospiti', 0)} ospiti")
         for noleggio in eventi_selezionati:
-          colore = "🔵" if noleggio["stato"] == "confermato" else "🟠"
+          ruolo_corrente = (str_lit.session_state.get("utente_loggato") or {}).get("ruolo", "")
+          non_confermato_non_apribile = noleggio.get("stato") != "confermato" and ruolo_corrente == "Magazzino"
+          colore = "🔵" if noleggio["stato"] == "confermato" else "🟡"
           orario = f"{noleggio['inizio'].strftime('%H:%M')} – {noleggio['fine'].strftime('%H:%M')}"
           if noleggio["inizio"].date() != giorno_selezionato:
             orario = f"In corso · fino alle {noleggio['fine'].strftime('%H:%M')}"
-          if str_lit.button(f"{colore} {noleggio['titolo']}\n{orario}", key=f"demo_pannello_noleggio_{noleggio['id']}", use_container_width=True):
+          if str_lit.button(f"{colore} {noleggio['titolo']}\n{orario}", key=f"demo_pannello_noleggio_{noleggio['id']}", use_container_width=True, disabled=non_confermato_non_apribile):
             str_lit.session_state.noleggio_demo_modifica = noleggio["id"]
             str_lit.session_state.noleggio_demo_crea_data = None
             str_lit.session_state.evento_catering_demo_selezionato = None
             str_lit.rerun()
-          str_lit.caption(f"{noleggio['location']} · {noleggio['referente']}")
+          if non_confermato_non_apribile:
+            str_lit.caption("Disponibile dopo la conferma del noleggio.")
+          else:
+            str_lit.caption(f"{noleggio['location']} · {noleggio['referente']}")
 
   if str_lit.session_state.get("noleggio_demo_crea_data"):
     modale_crea_noleggio_demo(str_lit.session_state.noleggio_demo_crea_data)
@@ -1230,9 +1255,8 @@ def modale_crea_evento():
     with col_n1:
       n_nome = str_lit.text_input("🏷️ Nome Evento / Cliente *")
     with col_n2:
-      n_data = str_lit.text_input(
-          "📅 Data Evento (es. 25/12/2026)",
-          value=date.today().strftime("%d/%m/%Y"),
+      n_data = str_lit.date_input(
+          "📅 Data Evento", value=date.today(), format="DD/MM/YYYY"
       )
     with col_n3:
       n_orario = str_lit.time_input("🕒 Orario evento")
@@ -1768,7 +1792,7 @@ else:
                   " margin-bottom: 15px;'>📦</div>",
                   unsafe_allow_html=True,
               )
-            str_lit.markdown("### Magazzino & Noleggio")
+            str_lit.markdown("### Magazzino")
             str_lit.markdown(
                 "<div class='card-desc'>Gestione scorte e codici QR.</div>",
                 unsafe_allow_html=True,
