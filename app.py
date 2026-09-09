@@ -11,11 +11,6 @@ import re
 import unicodedata
 import qrcode
 import streamlit as str_lit
-import streamlit.components.v1 as components
-try:
-  from pdf2image import convert_from_bytes
-except ImportError:
-  convert_from_bytes = None
 from supabase import create_client, Client
 import requests
 from urllib.parse import quote
@@ -603,45 +598,6 @@ def orario_per_widget(evento):
   return datetime.strptime(valore, "%H:%M").time()
 
 
-def mostra_allegato_magazzino(nome_file, dati_b64, mime, chiave):
-  """Mostra un allegato a Magazzino 1 senza creare un pulsante di download."""
-  if mime == "application/octet-stream":
-    estensione = nome_file.lower().rsplit(".", 1)[-1] if "." in nome_file else ""
-    mime = {"pdf": "application/pdf", "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg"}.get(estensione, mime)
-  if not dati_b64:
-    str_lit.info(f"Anteprima non disponibile per {nome_file}.")
-    return
-  dati = base64.b64decode(dati_b64)
-  with str_lit.expander(f"Apri anteprima: {nome_file}", expanded=False):
-    if mime.startswith("image/"):
-      str_lit.image(dati, width=420)
-      str_lit.caption("Anteprima compatta del documento.")
-    elif mime == "application/pdf":
-      if convert_from_bytes:
-        try:
-          pagina = convert_from_bytes(dati, dpi=100, first_page=1, last_page=1)[0]
-          buffer = BytesIO()
-          pagina.save(buffer, format="PNG", optimize=True)
-          immagine_b64 = base64.b64encode(buffer.getvalue()).decode("ascii")
-          components.html(
-              f'''<div style="font-family:Arial;text-align:center;background:#f8fafc;padding:8px;border:1px solid #d0d5dd;border-radius:8px;">
-              <button onclick="window.print()" style="background:#0056b3;color:white;border:0;border-radius:6px;padding:7px 16px;font-weight:700;cursor:pointer;margin-bottom:8px;">Stampa anteprima</button>
-              <img src="data:image/png;base64,{immagine_b64}" style="max-width:100%;max-height:330px;object-fit:contain;display:block;margin:auto;">
-              </div>''',
-              height=370,
-              scrolling=True,
-          )
-          str_lit.caption("Mostrata la prima pagina in anteprima compatta.")
-        except Exception:
-          pdf_b64 = base64.b64encode(dati).decode("ascii")
-          components.html(f'<iframe src="data:application/pdf;base64,{pdf_b64}" width="100%" height="360px"></iframe>', height=380, scrolling=True)
-      else:
-        pdf_b64 = base64.b64encode(dati).decode("ascii")
-        components.html(f'<iframe src="data:application/pdf;base64,{pdf_b64}" width="100%" height="360px"></iframe>', height=380, scrolling=True)
-    else:
-      str_lit.info("Anteprima non disponibile per questo formato.")
-
-
 def genera_testo_lista_attrezzature(nome_evento, lista_prodotti):
   testo = f"LISTA ATTREZZATURE PER EVENTO: {nome_evento}\n"
   testo += "=" * 55 + "\n\n"
@@ -936,11 +892,10 @@ def modale_modifica_noleggio_demo(noleggio_id):
     return
   utente_corrente = str_lit.session_state.get("utente_loggato") or {}
   ruolo_corrente = utente_corrente.get("ruolo", "")
-  is_magazzino1 = ruolo_corrente in {"Magazzino", "Magazzino1", "Magazzino 1"}
   puo_modificare = ruolo_corrente in {"Amministratore", "Wedding", "Magazzino2"}
   if not puo_modificare:
     str_lit.info("Modalità sola visualizzazione.")
-  if is_magazzino1:
+  if ruolo_corrente == "Magazzino":
     stato_testo = "Confermato" if noleggio.get("stato") == "confermato" else "Non confermato"
     colore_stato = "success" if noleggio.get("stato") == "confermato" else "warning"
     str_lit.markdown(f"## {noleggio.get('titolo', 'Noleggio')}")
@@ -969,22 +924,14 @@ def modale_modifica_noleggio_demo(noleggio_id):
         dati = noleggio.get(f"{campo}_dati_b64", "")
         mime = noleggio.get(f"{campo}_mime", "application/octet-stream")
         str_lit.markdown(f"**{etichetta}:** `{nome}`")
-        if dati:
-          dati_allegato = base64.b64decode(dati)
-          with str_lit.expander(f"Apri anteprima {etichetta}", expanded=False):
-            if mime.startswith("image/"):
-              str_lit.image(dati_allegato, width=420)
-              str_lit.caption("Per stampare: apri l'immagine in una nuova scheda e usa Stampa.")
-            elif mime == "application/pdf":
-              href_pdf = f"data:application/pdf;base64,{dati}"
-              str_lit.markdown(
-                  f'<a href="{href_pdf}" target="_blank" rel="noopener">Apri PDF in una nuova scheda e stampa</a>',
-                  unsafe_allow_html=True,
-              )
-            else:
-              str_lit.info("Anteprima non disponibile per questo formato. Apri il file dalla nuova scheda del browser per stamparlo.")
-        else:
-          str_lit.info("Anteprima non disponibile per questo allegato demo.")
+        str_lit.download_button(
+            f"📥 Scarica allegato {etichetta}",
+            data=base64.b64decode(dati) if dati else f"Allegato demo: {nome}".encode("utf-8"),
+            file_name=nome,
+            mime=mime,
+            key=f"magazzino_sola_lettura_{noleggio_id}_{campo}",
+            use_container_width=True,
+        )
     if not presenti:
       str_lit.info("Nessun allegato disponibile.")
     return
@@ -1058,7 +1005,6 @@ def modale_modifica_noleggio_demo(noleggio_id):
 @str_lit.dialog("Dettaglio Evento Catering", width="large")
 def modale_catering_da_calendario(evento):
   ruolo = (str_lit.session_state.get("utente_loggato") or {}).get("ruolo", "")
-  magazzino_1 = ruolo in {"Magazzino", "Magazzino1", "Magazzino 1"}
   indice_evento = next((indice for indice, elemento in enumerate(str_lit.session_state.get("eventi_catering", [])) if (evento.get("id") and elemento.get("id") == evento.get("id")) or (not evento.get("id") and elemento.get("nome_evento") == evento.get("nome_evento") and elemento.get("data") == evento.get("data"))), None)
   str_lit.markdown(f"## {evento.get('nome_evento', 'Evento Catering')}")
   col1, col2, col3 = str_lit.columns(3)
@@ -1076,18 +1022,12 @@ def modale_catering_da_calendario(evento):
     str_lit.markdown(f"### {titolo}")
     str_lit.info(evento.get(campo_note) or f"Nessuna nota per {chiave}.")
     for indice, allegato in enumerate(evento.get(campo_allegati) or []):
-      nome_allegato = allegato.get("nome_file", f"allegato_{chiave}_{indice}")
-      dati_b64 = allegato.get("dati_b64", "")
-      mime_allegato = allegato.get("mime", "application/octet-stream")
-      if magazzino_1:
-        mostra_allegato_magazzino(nome_allegato, dati_b64, mime_allegato, f"evento_{chiave}_{indice}")
-      else:
-        str_lit.download_button(
-            f"📥 Scarica allegato: {nome_allegato}",
-            data=base64.b64decode(dati_b64),
-            file_name=nome_allegato,
-            key=f"calendario_{chiave}_{evento.get('id', evento.get('nome_evento', 'evento'))}_{indice}",
-        )
+      str_lit.download_button(
+          f"📥 Scarica allegato: {allegato.get('nome_file', 'Allegato')}",
+          data=base64.b64decode(allegato.get("dati_b64", "")),
+          file_name=allegato.get("nome_file", f"allegato_{chiave}_{indice}"),
+          key=f"calendario_{chiave}_{evento.get('id', evento.get('nome_evento', 'evento'))}_{indice}",
+      )
 
   mostra_note_calendario("Note per tutti", "note_tutti", "allegati_tutti", "tutti")
   sezioni_visibili = {
@@ -1519,7 +1459,6 @@ def modale_crea_evento(data_precompilata=None):
               res.append({
                   "nome_file": f.name,
                   "dati_b64": base64.b64encode(f.getvalue()).decode("utf-8"),
-                  "mime": getattr(f, "type", "application/octet-stream"),
               })
           return res
 
@@ -1691,7 +1630,6 @@ def modale_modifica_evento(idx_ev):
             risultati.append({
                 "nome_file": f.name,
                 "dati_b64": base64.b64encode(f.getvalue()).decode("utf-8"),
-                "mime": getattr(f, "type", "application/octet-stream"),
             })
         return risultati
 
@@ -1801,7 +1739,7 @@ else:
   is_wedding = ruolo_utente == "Wedding"
   is_cucina = ruolo_utente == "Cucina"
   is_sala = ruolo_utente == "Sala"
-  is_magazzino = ruolo_utente in {"Magazzino", "Magazzino1", "Magazzino 1"}
+  is_magazzino = ruolo_utente == "Magazzino"
   is_magazzino2 = ruolo_utente == "Magazzino2"
 
   puoi_gestire_eventi = is_admin or is_wedding
@@ -2277,15 +2215,12 @@ else:
                 if allegati:
                   str_lit.markdown(f"📎 **Allegati {titolo.replace('Note per ', '')}:**")
                   for att in allegati:
-                    if is_magazzino:
-                      mostra_allegato_magazzino(att["nome_file"], att["dati_b64"], att.get("mime", "application/octet-stream"), f"vecchio_{prefisso}_{idx_ev}")
-                    else:
-                      str_lit.download_button(
-                          f"📥 Scarica allegato: {att['nome_file']}",
-                          data=base64.b64decode(att["dati_b64"]),
-                          file_name=att["nome_file"],
-                          key=f"dl_{prefisso}_{idx_ev}_{att['nome_file']}",
-                      )
+                    str_lit.download_button(
+                        f"📥 Scarica allegato: {att['nome_file']}",
+                        data=base64.b64decode(att["dati_b64"]),
+                        file_name=att["nome_file"],
+                        key=f"dl_{prefisso}_{idx_ev}_{att['nome_file']}",
+                    )
 
               mostra_sezione_note(
                   "Note per tutti", ev.get("note_tutti"),
@@ -2332,7 +2267,12 @@ else:
                 str_lit.success(ev.get("note_magazzino") or "Nessuna nota.")
                 if ev.get("allegati_magazzino"):
                   for att in ev.get("allegati_magazzino"):
-                    mostra_allegato_magazzino(att["nome_file"], att["dati_b64"], att.get("mime", "application/octet-stream"), f"vecchio_mag_{idx_ev}")
+                    str_lit.download_button(
+                        f"📥 Scarica allegato: {att['nome_file']}",
+                        data=base64.b64decode(att["dati_b64"]),
+                        file_name=att["nome_file"],
+                        key=f"dl_mag_{idx_ev}_{att['nome_file']}",
+                    )
 
     elif str_lit.session_state.area_selezionata == "opzione_3":
       if is_admin:
