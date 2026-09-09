@@ -844,6 +844,8 @@ def mostra_noleggi_demo():
   .noleggi-side-title {font-size:1.2rem; font-weight:800; color:#1d2939; margin-bottom:3px;}
   .noleggi-side-subtitle {font-size:.82rem; color:#667085; margin-bottom:16px;}
   .noleggi-day-muted {height:70px; background:#f8fafc; border:1px solid #eef2f6; border-radius:8px;}
+  .noleggi-dots {display:flex; justify-content:center; gap:4px; min-height:12px; padding:4px 0 2px;}
+  .noleggi-event-dot {display:inline-block; width:8px; height:8px; border-radius:50%;}
   </style>
   """, unsafe_allow_html=True)
 
@@ -878,12 +880,14 @@ def mostra_noleggi_demo():
             str_lit.session_state.noleggio_demo_crea_data = None
             str_lit.session_state.noleggio_demo_modifica = None
             str_lit.rerun()
-          for indice, noleggio in enumerate(eventi_giorno[:3]):
+          pallini = []
+          for noleggio in eventi_giorno[:5]:
             colore = "#0056b3" if noleggio["stato"] == "confermato" else "#e7a928"
-            prefisso = "↳ " if giorno != noleggio["inizio"].date() else ""
-            str_lit.markdown(f"<div style='height:5px;background:{colore};border-radius:4px;margin:3px 2px' title='{prefisso}{noleggio['titolo']}'></div>", unsafe_allow_html=True)
-          if len(eventi_giorno) > 3:
-            str_lit.caption(f"+{len(eventi_giorno)-3}")
+            pallini.append(f"<span class='noleggi-event-dot' style='background:{colore}' title='{noleggio['titolo']}'></span>")
+          if pallini:
+            str_lit.markdown(f"<div class='noleggi-dots'>{''.join(pallini)}</div>", unsafe_allow_html=True)
+          if len(eventi_giorno) > 5:
+            str_lit.caption(f"+{len(eventi_giorno)-5}")
 
   with pannello_col:
     eventi_selezionati = [n for n in str_lit.session_state.noleggi_demo if n["inizio"].date() <= giorno_selezionato <= n["fine"].date()]
