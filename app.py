@@ -1,4 +1,5 @@
 from datetime import date, datetime
+import calendar
 import base64
 from io import BytesIO
 import json
@@ -732,6 +733,140 @@ if "prodotto_in_modifica" not in str_lit.session_state:
 if "indice_modifica" not in str_lit.session_state:
   str_lit.session_state.indice_modifica = None
 
+# Demo temporanea Noleggi Confermati: non legge e non scrive su Supabase.
+if "noleggi_demo" not in str_lit.session_state:
+  str_lit.session_state.noleggi_demo = [
+    {"id": 1, "titolo": "Noleggio Villa Aurora", "inizio": datetime(2026, 6, 5, 9, 0), "fine": datetime(2026, 6, 6, 18, 0), "stato": "confermato", "location": "Villa Aurora", "referente": "Marco Bianchi", "telefono": "+39 333 1234567", "note": "Consegna ingresso principale.", "bolla": "Bolla_05062026.pdf", "ddt": "DDT_05062026.pdf", "vario": "Foto_carico.jpg"},
+    {"id": 2, "titolo": "Secondo noleggio", "inizio": datetime(2026, 6, 5, 19, 0), "fine": datetime(2026, 6, 5, 23, 0), "stato": "non confermato", "location": "Villa Aurora", "referente": "Paolo Neri", "telefono": "+39 333 2223344", "note": "Da confermare.", "bolla": "Bolla_2.pdf", "ddt": "DDT_2.pdf", "vario": "Planimetria.pdf"},
+    {"id": 3, "titolo": "Noleggio Tavoli e Sedie", "inizio": datetime(2026, 6, 24, 8, 0), "fine": datetime(2026, 6, 25, 20, 0), "stato": "confermato", "location": "Castello San Marco", "referente": "Andrea Neri", "telefono": "+39 328 9876543", "note": "Ritiro il giorno successivo.", "bolla": "Bolla_24062026.pdf", "ddt": "DDT_24062026.pdf", "vario": "Lista_materiale.pdf"},
+  ]
+if "noleggio_demo_mese" not in str_lit.session_state:
+  str_lit.session_state.noleggio_demo_mese = 6
+if "noleggio_demo_anno" not in str_lit.session_state:
+  str_lit.session_state.noleggio_demo_anno = 2026
+
+@str_lit.dialog("Nuovo Noleggio Confermato", width="large")
+def modale_crea_noleggio_demo(data_selezionata):
+  str_lit.write(f"Data selezionata: **{data_selezionata.strftime('%d/%m/%Y')}**")
+  with str_lit.form("form_crea_noleggio_demo"):
+    titolo = str_lit.text_input("Nome del noleggio")
+    col_a, col_b = str_lit.columns(2)
+    with col_a:
+      data_inizio = str_lit.date_input("Data inizio", data_selezionata)
+      ora_inizio = str_lit.time_input("Ora inizio")
+      location = str_lit.text_input("Location")
+      referente = str_lit.text_input("Persona di riferimento")
+      telefono = str_lit.text_input("Numero di telefono")
+    with col_b:
+      data_fine = str_lit.date_input("Data fine", data_selezionata)
+      ora_fine = str_lit.time_input("Ora fine")
+      stato = str_lit.selectbox("Stato", ["Confermato", "Non confermato"])
+      note = str_lit.text_area("Note varie")
+    a1, a2, a3 = str_lit.columns(3)
+    with a1:
+      bolla = str_lit.file_uploader("Bolla con prezzo", type=["pdf", "jpg", "jpeg", "png"])
+    with a2:
+      ddt = str_lit.file_uploader("DDT", type=["pdf", "jpg", "jpeg", "png"])
+    with a3:
+      vario = str_lit.file_uploader("Vario", type=["pdf", "jpg", "jpeg", "png"])
+    salva = str_lit.form_submit_button("Salva noleggio", type="primary", use_container_width=True)
+  if salva:
+    if not titolo.strip() or not location.strip() or not referente.strip() or not telefono.strip():
+      str_lit.error("Compila nome, location, referente e numero di telefono.")
+    else:
+      nuovo_id = max([x.get("id", 0) for x in str_lit.session_state.noleggi_demo] + [0]) + 1
+      str_lit.session_state.noleggi_demo.append({
+          "id": nuovo_id, "titolo": titolo, "inizio": datetime.combine(data_inizio, ora_inizio),
+          "fine": datetime.combine(data_fine, ora_fine), "stato": "confermato" if stato == "Confermato" else "non confermato",
+          "location": location, "referente": referente, "telefono": telefono, "note": note,
+          "bolla": bolla.name if bolla else "Nessun file", "ddt": ddt.name if ddt else "Nessun file", "vario": vario.name if vario else "Nessun file"})
+      str_lit.session_state.noleggio_demo_crea_data = None
+      str_lit.success("Noleggio creato nella demo temporanea.")
+      str_lit.rerun()
+
+
+@str_lit.dialog("Dettaglio Noleggio Confermato", width="large")
+def modale_modifica_noleggio_demo(noleggio_id):
+  noleggio = next((x for x in str_lit.session_state.noleggi_demo if x.get("id") == noleggio_id), None)
+  if not noleggio:
+    str_lit.error("Noleggio non trovato.")
+    return
+  utente_corrente = str_lit.session_state.get("utente_loggato") or {}
+  ruolo_corrente = utente_corrente.get("ruolo", "")
+  puo_modificare = ruolo_corrente in {"Amministratore", "Magazzino2"}
+  if not puo_modificare:
+    str_lit.info("Modalità sola visualizzazione.")
+  with str_lit.form(f"form_modifica_noleggio_demo_{noleggio_id}"):
+    titolo = str_lit.text_input("Nome del noleggio", noleggio["titolo"], disabled=not puo_modificare)
+    col_a, col_b = str_lit.columns(2)
+    with col_a:
+      data_inizio = str_lit.date_input("Data inizio", noleggio["inizio"].date(), disabled=not puo_modificare)
+      ora_inizio = str_lit.time_input("Ora inizio", noleggio["inizio"].time(), disabled=not puo_modificare)
+      location = str_lit.text_input("Location", noleggio["location"], disabled=not puo_modificare)
+      referente = str_lit.text_input("Persona di riferimento", noleggio["referente"], disabled=not puo_modificare)
+      telefono = str_lit.text_input("Numero di telefono", noleggio["telefono"], disabled=not puo_modificare)
+    with col_b:
+      data_fine = str_lit.date_input("Data fine", noleggio["fine"].date(), disabled=not puo_modificare)
+      ora_fine = str_lit.time_input("Ora fine", noleggio["fine"].time(), disabled=not puo_modificare)
+      stato = str_lit.selectbox("Stato", ["Confermato", "Non confermato"], index=0 if noleggio["stato"] == "confermato" else 1, disabled=not puo_modificare)
+      note = str_lit.text_area("Note varie", noleggio["note"], disabled=not puo_modificare)
+    str_lit.markdown("#### Allegati")
+    if ruolo_corrente in {"Amministratore", "Magazzino2"}:
+      str_lit.write(f"Bolla con prezzo: `{noleggio['bolla']}`")
+    if ruolo_corrente in {"Amministratore", "Magazzino2", "Magazzino"}:
+      str_lit.write(f"DDT: `{noleggio['ddt']}`")
+      str_lit.write(f"Vario: `{noleggio['vario']}`")
+    salva = str_lit.form_submit_button("Salva modifiche", type="primary", use_container_width=True, disabled=not puo_modificare)
+  if salva:
+    noleggio.update({"titolo": titolo, "inizio": datetime.combine(data_inizio, ora_inizio), "fine": datetime.combine(data_fine, ora_fine), "location": location, "referente": referente, "telefono": telefono, "note": note, "stato": "confermato" if stato == "Confermato" else "non confermato"})
+    str_lit.session_state.noleggio_demo_modifica = None
+    str_lit.success("Modifiche salvate nella demo temporanea.")
+    str_lit.rerun()
+
+
+def mostra_noleggi_demo():
+  str_lit.subheader("📅 Noleggi Confermati")
+  str_lit.caption("Anteprima completa con dati dimostrativi. Supabase non viene utilizzato in questa fase.")
+  col_mese, col_anno = str_lit.columns([2, 1])
+  with col_mese:
+    mese = str_lit.selectbox("Mese calendario", list(range(1, 13)), index=str_lit.session_state.noleggio_demo_mese - 1, format_func=lambda m: ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"][m - 1], key="noleggio_mese_select")
+  with col_anno:
+    anno = str_lit.selectbox("Anno calendario", list(range(2025, 2036)), index=list(range(2025, 2036)).index(str_lit.session_state.noleggio_demo_anno), key="noleggio_anno_select")
+  str_lit.markdown("**Legenda:** 🔵 Confermato &nbsp;&nbsp; 🟠 Non confermato")
+  for col, nome_giorno in zip(str_lit.columns(7), ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"]):
+    with col:
+      str_lit.markdown(f"**{nome_giorno}**")
+  for settimana in calendar.Calendar(firstweekday=0).monthdatescalendar(int(anno), int(mese)):
+    colonne = str_lit.columns(7)
+    for colonna, giorno in zip(colonne, settimana):
+      with colonna:
+        if giorno.month != int(mese):
+          with str_lit.container(border=True):
+            str_lit.write("")
+          continue
+        eventi_giorno = [n for n in str_lit.session_state.noleggi_demo if n["inizio"].date() <= giorno <= n["fine"].date()]
+        with str_lit.container(border=True):
+          if str_lit.button(str(giorno.day), key=f"demo_giorno_{giorno}", use_container_width=True):
+            str_lit.session_state.noleggio_demo_crea_data = giorno
+            str_lit.session_state.noleggio_demo_modifica = None
+            str_lit.rerun()
+          for noleggio in eventi_giorno:
+            colore = "🔵" if noleggio["stato"] == "confermato" else "🟠"
+            testo = f"{colore} {noleggio['titolo']}"
+            if giorno != noleggio["inizio"].date():
+              testo = f"{colore} ↳ {noleggio['titolo']}"
+            if str_lit.button(testo, key=f"demo_noleggio_{noleggio['id']}_{giorno}", use_container_width=True):
+              str_lit.session_state.noleggio_demo_modifica = noleggio["id"]
+              str_lit.session_state.noleggio_demo_crea_data = None
+              str_lit.rerun()
+          if not eventi_giorno:
+            str_lit.caption("Giorno libero")
+  if str_lit.session_state.get("noleggio_demo_crea_data"):
+    modale_crea_noleggio_demo(str_lit.session_state.noleggio_demo_crea_data)
+  if str_lit.session_state.get("noleggio_demo_modifica"):
+    modale_modifica_noleggio_demo(str_lit.session_state.noleggio_demo_modifica)
+
+
 query_params = str_lit.query_params
 codice_scansionato = query_params.get("codice")
 
@@ -1369,6 +1504,17 @@ else:
             str_lit.session_state.area_selezionata = "opzione_3"
             str_lit.rerun()
             str_lit.stop()
+      # Nuova voce aggiunta senza modificare le card esistenti.
+      c_noleggi, _, _, _ = str_lit.columns(4)
+      with c_noleggi:
+        with str_lit.container(border=True):
+          str_lit.markdown("<div style='height: 100px; display: flex; align-items: center; justify-content: center; font-size: 3rem; margin-bottom: 15px;'>📅</div>", unsafe_allow_html=True)
+          str_lit.markdown("### Noleggi Confermati")
+          str_lit.markdown("<div class='card-desc'>Calendario dei noleggi e degli eventi.</div>", unsafe_allow_html=True)
+          if str_lit.button("Apri Noleggi", use_container_width=True, type="primary", key="btn_h_noleggi_admin"):
+            str_lit.session_state.area_selezionata = "opzione_noleggi"
+            str_lit.rerun()
+      
     else:
       c1, c2, c3 = str_lit.columns(3)
       with c1:
@@ -1433,7 +1579,14 @@ else:
               str_lit.rerun()
               str_lit.stop()
       with c3:
-        pass
+        if is_magazzino or is_magazzino2:
+          with str_lit.container(border=True):
+            str_lit.markdown("<div style='height: 100px; display: flex; align-items: center; justify-content: center; font-size: 3rem; margin-bottom: 15px;'>📅</div>", unsafe_allow_html=True)
+            str_lit.markdown("### Noleggi Confermati")
+            str_lit.markdown("<div class='card-desc'>Calendario dei noleggi e degli eventi.</div>", unsafe_allow_html=True)
+            if str_lit.button("Apri Noleggi", use_container_width=True, type="primary", key="btn_h_noleggi_magazzino"):
+              str_lit.session_state.area_selezionata = "opzione_noleggi"
+              str_lit.rerun()
 
   else:
     if str_lit.button("⬅️ Torna alla Home"):
@@ -1443,7 +1596,10 @@ else:
       str_lit.rerun()
       str_lit.stop()
 
-    if str_lit.session_state.area_selezionata == "opzione_1":
+    if str_lit.session_state.area_selezionata == "opzione_noleggi":
+      mostra_noleggi_demo()
+
+    elif str_lit.session_state.area_selezionata == "opzione_1":
       
       str_lit.subheader("📦 Magazzino & Noleggio Attrezzature")
 
