@@ -12,6 +12,10 @@ import unicodedata
 import qrcode
 import streamlit as str_lit
 import streamlit.components.v1 as components
+try:
+  from pdf2image import convert_from_bytes
+except ImportError:
+  convert_from_bytes = None
 from supabase import create_client, Client
 import requests
 from urllib.parse import quote
@@ -613,13 +617,27 @@ def mostra_allegato_magazzino(nome_file, dati_b64, mime, chiave):
       str_lit.image(dati, width=420)
       str_lit.caption("Anteprima compatta del documento.")
     elif mime == "application/pdf":
-      pdf_b64 = base64.b64encode(dati).decode("ascii")
-      components.html(
-          f'<embed src="data:application/pdf;base64,{pdf_b64}" type="application/pdf" width="100%" height="420px">',
-          height=440,
-          scrolling=True,
-      )
-      str_lit.caption("Usa il comando di stampa del visualizzatore PDF.")
+      if convert_from_bytes:
+        try:
+          pagina = convert_from_bytes(dati, dpi=100, first_page=1, last_page=1)[0]
+          buffer = BytesIO()
+          pagina.save(buffer, format="PNG", optimize=True)
+          immagine_b64 = base64.b64encode(buffer.getvalue()).decode("ascii")
+          components.html(
+              f'''<div style="font-family:Arial;text-align:center;background:#f8fafc;padding:8px;border:1px solid #d0d5dd;border-radius:8px;">
+              <button onclick="window.print()" style="background:#0056b3;color:white;border:0;border-radius:6px;padding:7px 16px;font-weight:700;cursor:pointer;margin-bottom:8px;">Stampa anteprima</button>
+              <img src="data:image/png;base64,{immagine_b64}" style="max-width:100%;max-height:330px;object-fit:contain;display:block;margin:auto;">
+              </div>''',
+              height=370,
+              scrolling=True,
+          )
+          str_lit.caption("Mostrata la prima pagina in anteprima compatta.")
+        except Exception:
+          pdf_b64 = base64.b64encode(dati).decode("ascii")
+          components.html(f'<iframe src="data:application/pdf;base64,{pdf_b64}" width="100%" height="360px"></iframe>', height=380, scrolling=True)
+      else:
+        pdf_b64 = base64.b64encode(dati).decode("ascii")
+        components.html(f'<iframe src="data:application/pdf;base64,{pdf_b64}" width="100%" height="360px"></iframe>', height=380, scrolling=True)
     else:
       str_lit.info("Anteprima non disponibile per questo formato.")
 
