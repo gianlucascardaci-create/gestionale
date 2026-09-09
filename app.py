@@ -874,20 +874,18 @@ def mostra_noleggi_demo():
             continue
           eventi_giorno = [n for n in str_lit.session_state.noleggi_demo if n["inizio"].date() <= giorno <= n["fine"].date()]
           selezionato = giorno == giorno_selezionato
-          etichetta = f"● {giorno.day}" if selezionato else str(giorno.day)
+          simboli_eventi = []
+          for noleggio in eventi_giorno[:5]:
+            simboli_eventi.append("🔵" if noleggio["stato"] == "confermato" else "🟠")
+          riga_eventi = " ".join(simboli_eventi) if simboli_eventi else "·"
+          etichetta = f"{'● ' if selezionato else ''}{giorno.day}\n{riga_eventi}"
+          if len(eventi_giorno) > 5:
+            etichetta += f"  +{len(eventi_giorno)-5}"
           if str_lit.button(etichetta, key=f"demo_giorno_{giorno}", use_container_width=True):
             str_lit.session_state.noleggio_demo_giorno_selezionato = giorno
             str_lit.session_state.noleggio_demo_crea_data = None
             str_lit.session_state.noleggio_demo_modifica = None
             str_lit.rerun()
-          pallini = []
-          for noleggio in eventi_giorno[:5]:
-            colore = "#0056b3" if noleggio["stato"] == "confermato" else "#e7a928"
-            pallini.append(f"<span class='noleggi-event-dot' style='background:{colore}' title='{noleggio['titolo']}'></span>")
-          if pallini:
-            str_lit.markdown(f"<div class='noleggi-dots'>{''.join(pallini)}</div>", unsafe_allow_html=True)
-          if len(eventi_giorno) > 5:
-            str_lit.caption(f"+{len(eventi_giorno)-5}")
 
   with pannello_col:
     eventi_selezionati = [n for n in str_lit.session_state.noleggi_demo if n["inizio"].date() <= giorno_selezionato <= n["fine"].date()]
