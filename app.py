@@ -1035,55 +1035,50 @@ def mostra_noleggi_demo():
 
   mesi = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"]
   str_lit.markdown(f"<div class='planner-header'><div><div class='planner-kicker'>{'EVENTI CATERING' if solo_catering else 'PIANIFICAZIONE NOLEGGI'}</div><h1>{'Calendario Catering' if solo_catering else 'Calendario Noleggi'}</h1><p>Seleziona una giornata per aprire direttamente l'evento.</p></div></div>", unsafe_allow_html=True)
-  col_mese, col_anno, col_spazio = str_lit.columns([1.25, .8, 2.2])
+  col_mese, col_anno = str_lit.columns([1.4, 1.0])
   with col_mese:
     mese = str_lit.selectbox("Mese", list(range(1, 13)), index=str_lit.session_state.noleggio_demo_mese - 1, format_func=lambda m: mesi[m - 1], key="noleggio_mese_select")
   with col_anno:
     anno = str_lit.selectbox("Anno", list(range(2025, 2036)), index=list(range(2025, 2036)).index(str_lit.session_state.noleggio_demo_anno), key="noleggio_anno_select")
-  with col_spazio:
-    azioni = []
-    if puo_creare_noleggio:
-      azioni.append("noleggio")
-    if puo_creare_catering:
-      azioni.append("catering")
-    if azioni:
-      if "catering" in azioni and "noleggio" in azioni:
-        a1, a2 = str_lit.columns(2)
-        with a1:
-          if str_lit.button("＋ Noleggio", type="primary", use_container_width=True, key="planner_new_rental"):
-            modale_crea_noleggio_demo(str_lit.session_state.get("noleggio_demo_giorno_selezionato", date(int(anno), int(mese), 1)))
-        with a2:
-          if str_lit.button("＋ Catering", type="primary", use_container_width=True, key="planner_new_catering"):
-            modale_crea_evento(str_lit.session_state.get("noleggio_demo_giorno_selezionato", date(int(anno), int(mese), 1)))
-      elif "noleggio" in azioni:
+  azioni = []
+  if puo_creare_noleggio:
+    azioni.append("noleggio")
+  if puo_creare_catering:
+    azioni.append("catering")
+  if azioni:
+    str_lit.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    a1, a2 = str_lit.columns(2 if len(azioni) == 2 else 1)
+    if "noleggio" in azioni:
+      with a1:
         if str_lit.button("＋ Nuovo noleggio", type="primary", use_container_width=True, key="planner_new_rental"):
           modale_crea_noleggio_demo(str_lit.session_state.get("noleggio_demo_giorno_selezionato", date(int(anno), int(mese), 1)))
-      else:
+    if "catering" in azioni:
+      with (a2 if len(azioni) == 2 else a1):
         if str_lit.button("＋ Nuovo Catering", type="primary", use_container_width=True, key="planner_new_catering"):
           modale_crea_evento(str_lit.session_state.get("noleggio_demo_giorno_selezionato", date(int(anno), int(mese), 1)))
 
   str_lit.markdown("""
   <style>
-  .planner-header {background:linear-gradient(135deg,#f8fbff 0%,#eef6ff 100%); border:1px solid #d8e8f8; border-radius:18px; padding:22px 26px 18px; margin:8px 0 16px;}
+  .planner-header {background:linear-gradient(135deg,#f8fbff 0%,#eef6ff 100%); border:1px solid #d8e8f8; border-radius:14px; padding:12px 18px 10px; margin:4px 0 8px;}
   .planner-kicker {font-size:.68rem; letter-spacing:.16em; font-weight:800; color:#667085; margin-bottom:5px;}
-  .planner-header h1 {font-size:1.85rem; color:#102a43; margin:0; letter-spacing:-.03em;}
-  .planner-header p {font-size:.86rem; color:#627d98; margin:5px 0 0;}
-  .planner-week {display:grid; grid-template-columns:repeat(7,1fr); gap:8px; margin:12px 0 6px;}
+  .planner-header h1 {font-size:1.45rem; color:#102a43; margin:0; letter-spacing:-.03em;}
+  .planner-header p {font-size:.76rem; color:#627d98; margin:3px 0 0;}
+  .planner-week {display:grid; grid-template-columns:repeat(7,1fr); gap:5px; margin:5px 0 3px;}
   .planner-week span {text-align:center; font-size:.7rem; letter-spacing:.12em; font-weight:800; color:#829ab1; text-transform:uppercase;}
-  .planner-day-card {min-height:104px; border:1px solid #e4e7ec; border-radius:13px; padding:10px; margin-bottom:8px; background:#fff; box-shadow:0 1px 2px rgba(16,24,40,.04);}
+  .planner-day-card {min-height:66px; border:1px solid #e4e7ec; border-radius:9px; padding:6px; margin-bottom:4px; background:#fff; box-shadow:0 1px 2px rgba(16,24,40,.04);}
   .planner-day-card.weekend {background:#fbfcfe;}
-  .planner-day-card.outside {background:#f8fafc; border-color:#f1f3f5; min-height:104px;}
+  .planner-day-card.outside {background:#f8fafc; border-color:#f1f3f5; min-height:66px;}
   .planner-day-card.has-rental {background:#f2f7ff; border-color:#b7d4f7;}
   .planner-day-card.has-pending {background:#fffaf0; border-color:#f4d58b;}
   .planner-day-card.has-catering {background:#f1faf4; border-color:#b7e2c3;}
   .planner-number {font-size:1.15rem; font-weight:850; color:#243b53;}
   .planner-number.today {color:#0056b3;}
-  .planner-event {font-size:.65rem; font-weight:750; margin-top:7px; padding:5px 6px; border-radius:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .planner-event {font-size:.56rem; font-weight:750; margin-top:4px; padding:3px 4px; border-radius:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .planner-event.rental {background:#dbeafe; color:#174a7c;}
   .planner-event.pending {background:#fef3c7; color:#854d0e;}
   .planner-event.catering {background:#dcfce7; color:#166534;}
-  .planner-empty {font-size:.68rem; color:#a0aec0; margin-top:12px;}
-  div[data-testid='stButton'] button[kind='secondary'] {border-radius:9px;}
+  .planner-empty {font-size:.56rem; color:#a0aec0; margin-top:7px;}
+  div[data-testid='stButton'] button[kind='secondary'] {border-radius:7px; min-height:22px; height:22px; padding:0 4px; font-size:.72rem; line-height:1;}
   </style>
   """, unsafe_allow_html=True)
 
@@ -1139,8 +1134,8 @@ def mostra_noleggi_demo():
         if len(noleggi) + len(catering) > 2:
           anteprima.append(f"<div class='planner-empty'>+ {len(noleggi) + len(catering) - 2} altri</div>")
         with str_lit.container(border=True):
-          str_lit.markdown(f"<div class='planner-day-card {card_class}'><div class='planner-number {'today' if giorno == date.today() else ''}'>{giorno.day}</div>{''.join(anteprima) if anteprima else '<div class=planner-empty>Nessun evento</div>'}</div>", unsafe_allow_html=True)
-          if str_lit.button("Apri giornata", key=f"planner_day_{giorno}", use_container_width=True):
+          str_lit.markdown(f"<div class='planner-day-card {card_class}'>{''.join(anteprima) if anteprima else '<div class=planner-empty>Nessun evento</div>'}</div>", unsafe_allow_html=True)
+          if str_lit.button(str(giorno.day), key=f"planner_day_{giorno}", use_container_width=True):
             str_lit.session_state.noleggio_demo_giorno_selezionato = giorno
             eventi = [("noleggio", n) for n in noleggi] + [("catering", e) for e in catering]
             str_lit.session_state.eventi_da_scegliere = eventi if len(eventi) > 1 else []
@@ -1173,6 +1168,10 @@ def mostra_noleggi_demo():
     evento = str_lit.session_state.evento_catering_demo_selezionato
     str_lit.session_state.evento_catering_demo_selezionato = None
     modale_catering_da_calendario(evento)
+  indice_modifica = str_lit.session_state.get("indice_evento_catering_da_modificare")
+  if indice_modifica is not None:
+    str_lit.session_state.indice_evento_catering_da_modificare = None
+    modale_modifica_evento(indice_modifica)
 
 
 query_params = str_lit.query_params
