@@ -895,6 +895,46 @@ def modale_modifica_noleggio_demo(noleggio_id):
   puo_modificare = ruolo_corrente in {"Amministratore", "Wedding", "Magazzino2"}
   if not puo_modificare:
     str_lit.info("Modalità sola visualizzazione.")
+  if ruolo_corrente == "Magazzino":
+    stato_testo = "Confermato" if noleggio.get("stato") == "confermato" else "Non confermato"
+    colore_stato = "success" if noleggio.get("stato") == "confermato" else "warning"
+    str_lit.markdown(f"## {noleggio.get('titolo', 'Noleggio')}")
+    info1, info2, info3 = str_lit.columns(3)
+    with info1:
+      str_lit.markdown(f"**Data inizio:** {noleggio['inizio'].strftime('%d/%m/%Y')}")
+      str_lit.markdown(f"**Ora inizio:** {noleggio['inizio'].strftime('%H:%M')}")
+      str_lit.markdown(f"**Location:** {noleggio.get('location', '-')}")
+    with info2:
+      str_lit.markdown(f"**Data fine:** {noleggio['fine'].strftime('%d/%m/%Y')}")
+      str_lit.markdown(f"**Ora fine:** {noleggio['fine'].strftime('%H:%M')}")
+      str_lit.markdown(f"**Referente:** {noleggio.get('referente', '-')}")
+    with info3:
+      str_lit.markdown(f"**Telefono:** {noleggio.get('telefono', '-')}")
+      getattr(str_lit, colore_stato)(f"**Stato:** {stato_testo}")
+    str_lit.markdown("---")
+    str_lit.markdown("### Note")
+    str_lit.info(noleggio.get("note") or "Nessuna nota.")
+    str_lit.markdown("### Allegati")
+    allegati_magazzino = [("DDT", "ddt"), ("Vario", "vario")]
+    presenti = False
+    for etichetta, campo in allegati_magazzino:
+      nome = noleggio.get(campo) or "Nessun file"
+      if nome != "Nessun file":
+        presenti = True
+        dati = noleggio.get(f"{campo}_dati_b64", "")
+        mime = noleggio.get(f"{campo}_mime", "application/octet-stream")
+        str_lit.markdown(f"**{etichetta}:** `{nome}`")
+        str_lit.download_button(
+            f"📥 Scarica allegato {etichetta}",
+            data=base64.b64decode(dati) if dati else f"Allegato demo: {nome}".encode("utf-8"),
+            file_name=nome,
+            mime=mime,
+            key=f"magazzino_sola_lettura_{noleggio_id}_{campo}",
+            use_container_width=True,
+        )
+    if not presenti:
+      str_lit.info("Nessun allegato disponibile.")
+    return
   if str_lit.session_state.get("noleggio_demo_eliminazione_in_attesa") == noleggio_id:
     str_lit.warning("Confermi l'eliminazione definitiva di questo noleggio?")
     conferma, annulla = str_lit.columns(2)
@@ -929,7 +969,11 @@ def modale_modifica_noleggio_demo(noleggio_id):
     if ruolo_corrente in {"Amministratore", "Magazzino2", "Magazzino"}:
       str_lit.write(f"DDT: `{noleggio['ddt']}`")
       str_lit.write(f"Vario: `{noleggio['vario']}`")
-    salva = str_lit.form_submit_button("Salva modifiche", type="primary", use_container_width=True, disabled=not puo_modificare)
+    col_comandi1, col_comandi2 = str_lit.columns(2)
+    with col_comandi1:
+      salva = str_lit.form_submit_button("Salva modifiche", type="primary", use_container_width=True, disabled=not puo_modificare)
+    with col_comandi2:
+      elimina_richiesto = str_lit.form_submit_button("Elimina noleggio", use_container_width=True, disabled=not puo_modificare)
   str_lit.markdown("#### Gestione allegati")
   allegati_visibili = []
   if ruolo_corrente in {"Amministratore", "Magazzino2"}:
@@ -938,38 +982,22 @@ def modale_modifica_noleggio_demo(noleggio_id):
     allegati_visibili.extend([("DDT", "ddt"), ("Vario", "vario")])
   for etichetta_allegato, campo_allegato in allegati_visibili:
     nome_allegato = noleggio.get(campo_allegato) or "Nessun file"
-    col_file, col_scarica, col_elimina = str_lit.columns([2.2, 1, 1])
+    col_file, col_scarica = str_lit.columns([3, 1])
     with col_file:
       str_lit.write(f"**{etichetta_allegato}:** `{nome_allegato}`")
     if nome_allegato != "Nessun file":
       dati_b64 = noleggio.get(f"{campo_allegato}_dati_b64", "")
       mime_allegato = noleggio.get(f"{campo_allegato}_mime", "application/octet-stream")
-      if dati_b64:
-        dati_allegato = base64.b64decode(dati_b64)
-        with str_lit.expander(f"👁️ Anteprima {etichetta_allegato}"):
-          if mime_allegato.startswith("image/"):
-            str_lit.image(dati_allegato, use_container_width=True)
-          elif mime_allegato == "application/pdf":
-            href_pdf = f"data:application/pdf;base64,{dati_b64}"
-            str_lit.markdown(f'<a href="{href_pdf}" target="_blank">Apri anteprima PDF in una nuova scheda</a>', unsafe_allow_html=True)
-          else:
-            str_lit.info("Anteprima non disponibile per questo formato.")
       with col_scarica:
         dati_download = base64.b64decode(dati_b64) if dati_b64 else f"Allegato demo: {nome_allegato}".encode("utf-8")
-        str_lit.download_button("⬇️ Scarica", data=dati_download, file_name=nome_allegato, mime=mime_allegato, key=f"scarica_demo_{noleggio_id}_{campo_allegato}", use_container_width=True)
-      if puo_modificare:
-        with col_elimina:
-          if str_lit.button("🗑️ Elimina", key=f"elimina_demo_{noleggio_id}_{campo_allegato}", use_container_width=True):
-            noleggio[campo_allegato] = "Nessun file"
-            str_lit.toast(f"{etichetta_allegato} eliminata dalla demo.")
-            str_lit.rerun()
+        str_lit.download_button("Scarica", data=dati_download, file_name=nome_allegato, mime=mime_allegato, key=f"scarica_demo_{noleggio_id}_{campo_allegato}", use_container_width=True)
 
   if salva:
     noleggio.update({"titolo": titolo, "inizio": datetime.combine(data_inizio, ora_inizio), "fine": datetime.combine(data_fine, ora_fine), "location": location, "referente": referente, "telefono": telefono, "note": note, "stato": "confermato" if stato == "Confermato" else "non confermato"})
     str_lit.session_state.noleggio_demo_modifica = None
     str_lit.success("Modifiche salvate nella demo temporanea.")
     str_lit.rerun()
-  if puo_modificare and str_lit.button("Elimina noleggio", key=f"elimina_noleggio_{noleggio_id}", use_container_width=True):
+  if puo_modificare and elimina_richiesto:
     str_lit.session_state.noleggio_demo_eliminazione_in_attesa = noleggio_id
     str_lit.rerun()
 
