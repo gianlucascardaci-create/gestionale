@@ -1365,7 +1365,8 @@ def modale_crea_evento(data_precompilata=None):
     with col_ndata:
       n_data = selettore_data_italiano("📅 Data Evento", data_precompilata or date.today(), "crea_catering_data_evento")
     with col_nora:
-      n_orario = str_lit.time_input("🕒 Orario evento", key="crea_catering_orario_evento")
+      str_lit.markdown("**🕒 Orario evento**")
+      n_orario = str_lit.time_input("Orario evento", key="crea_catering_orario_evento", label_visibility="collapsed")
 
     col_p1, col_p2, col_p3 = str_lit.columns(3)
     with col_p1:
@@ -1496,7 +1497,8 @@ def modale_modifica_evento(idx_ev):
       m_loc = str_lit.text_input("Location", value=ev_mod.get("location", ""))
     col_mora, col_mosp = str_lit.columns(2)
     with col_mora:
-      m_orario = str_lit.time_input("Orario evento", value=orario_per_widget(ev_mod), key=f"modifica_catering_orario_{idx_ev}")
+      str_lit.markdown("**🕒 Orario evento**")
+      m_orario = str_lit.time_input("Orario evento", value=orario_per_widget(ev_mod), key=f"modifica_catering_orario_{idx_ev}", label_visibility="collapsed")
     with col_mosp:
       str_lit.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
 
