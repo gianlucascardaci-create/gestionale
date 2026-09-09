@@ -814,12 +814,12 @@ def selettore_data_italiano(etichetta, valore, prefisso):
   str_lit.markdown(f"**{etichetta}**")
   col_giorno, col_mese, col_anno = str_lit.columns([1, 1.5, 1.15])
   with col_giorno:
-    giorno = str_lit.selectbox("Giorno", list(range(1, 32)), index=valore.day - 1, key=f"{prefisso}_giorno")
+    giorno = str_lit.selectbox("Giorno", list(range(1, 32)), index=valore.day - 1, key=f"{prefisso}_giorno", label_visibility="collapsed")
   with col_mese:
-    mese = str_lit.selectbox("Mese", list(range(1, 13)), index=valore.month - 1, format_func=lambda m: mesi_selettore[m - 1], key=f"{prefisso}_mese")
+    mese = str_lit.selectbox("Mese", list(range(1, 13)), index=valore.month - 1, format_func=lambda m: mesi_selettore[m - 1], key=f"{prefisso}_mese", label_visibility="collapsed")
   with col_anno:
     anni = list(range(2025, 2036))
-    anno = str_lit.selectbox("Anno", anni, index=anni.index(valore.year) if valore.year in anni else 0, key=f"{prefisso}_anno")
+    anno = str_lit.selectbox("Anno", anni, index=anni.index(valore.year) if valore.year in anni else 0, key=f"{prefisso}_anno", label_visibility="collapsed")
   ultimo_giorno = calendar.monthrange(anno, mese)[1]
   giorno = min(giorno, ultimo_giorno)
   return date(anno, mese, giorno)
@@ -1096,6 +1096,7 @@ def mostra_noleggi_demo():
   .planner-day-card.has-catering {background:#f0fdf4; border-color:#86efac;}
   .planner-number {font-size:1.15rem; font-weight:850; color:#243b53;}
   .planner-number.today {color:#0056b3;}
+  .planner-static-number {font-size:1.05rem; font-weight:800; color:#243b53; padding:5px 2px 9px;}
   .planner-event {font-size:.56rem; font-weight:750; margin-top:4px; padding:3px 4px; border-radius:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .planner-event.rental {background:#bfdbfe; color:#1e3a8a;}
   .planner-event.pending {background:#fed7aa; color:#9a3412;}
@@ -1158,19 +1159,22 @@ def mostra_noleggi_demo():
           anteprima.append(f"<div class='planner-empty'>+ {len(noleggi) + len(catering) - 2} altri</div>")
         with str_lit.container(border=True):
           str_lit.markdown(f"<div class='planner-day-card {card_class}'>{''.join(anteprima) if anteprima else '<div class=planner-empty>Nessun evento</div>'}</div>", unsafe_allow_html=True)
-          if str_lit.button(str(giorno.day), key=f"planner_day_{giorno}", use_container_width=True):
-            str_lit.session_state.noleggio_demo_giorno_selezionato = giorno
-            eventi = [("noleggio", n) for n in noleggi] + [("catering", e) for e in catering]
-            str_lit.session_state.eventi_da_scegliere = eventi if len(eventi) > 1 else []
-            str_lit.session_state.noleggio_demo_modifica = None
-            str_lit.session_state.evento_catering_demo_selezionato = None
-            if len(eventi) == 1:
-              tipo_evento, evento = eventi[0]
-              if tipo_evento == "catering":
-                str_lit.session_state.evento_catering_demo_selezionato = evento
-              elif not (evento.get("stato") != "confermato" and ruolo == "Magazzino"):
-                str_lit.session_state.noleggio_demo_modifica = evento.get("id")
-            str_lit.rerun()
+          eventi_giornata = [("noleggio", n) for n in noleggi] + [("catering", e) for e in catering]
+          if eventi_giornata:
+            if str_lit.button(str(giorno.day), key=f"planner_day_{giorno}", use_container_width=True):
+              str_lit.session_state.noleggio_demo_giorno_selezionato = giorno
+              str_lit.session_state.eventi_da_scegliere = eventi_giornata if len(eventi_giornata) > 1 else []
+              str_lit.session_state.noleggio_demo_modifica = None
+              str_lit.session_state.evento_catering_demo_selezionato = None
+              if len(eventi_giornata) == 1:
+                tipo_evento, evento = eventi_giornata[0]
+                if tipo_evento == "catering":
+                  str_lit.session_state.evento_catering_demo_selezionato = evento
+                elif not (evento.get("stato") != "confermato" and ruolo == "Magazzino"):
+                  str_lit.session_state.noleggio_demo_modifica = evento.get("id")
+              str_lit.rerun()
+          else:
+            str_lit.markdown(f"<div class='planner-static-number'>{giorno.day}</div>", unsafe_allow_html=True)
 
   scelte = str_lit.session_state.get("eventi_da_scegliere", [])
   if scelte:
