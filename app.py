@@ -561,6 +561,30 @@ def parse_data_evento(d_str):
   return datetime(2026, 1, 1)
 
 
+def data_display_con_orario(data_input, orario):
+  """Normalizza la data mostrata e conserva l'orario senza nuove colonne DB."""
+  data_normalizzata = parse_data_evento(data_input).strftime("%d/%m/%Y")
+  return f"{data_normalizzata} · {orario.strftime('%H:%M')}"
+
+
+def data_da_display_evento(evento):
+  """Estrae la sola data da un valore storico o dal nuovo formato con orario."""
+  valore = str(evento.get("data_display") or "").split("·", 1)[0].strip()
+  return valore or str(evento.get("data") or date.today().strftime("%d/%m/%Y"))
+
+
+def orario_evento(evento):
+  """Restituisce l'orario memorizzato nel campo data_display, se presente."""
+  valore = str(evento.get("data_display") or "")
+  corrispondenza = re.search(r"(?:·|\s)([01]\d|2[0-3]):[0-5]\d\b", valore)
+  return corrispondenza.group(1) if corrispondenza else ""
+
+
+def orario_per_widget(evento):
+  valore = orario_evento(evento) or "12:00"
+  return datetime.strptime(valore, "%H:%M").time()
+
+
 def genera_testo_lista_attrezzature(nome_evento, lista_prodotti):
   testo = f"LISTA ATTREZZATURE PER EVENTO: {nome_evento}\n"
   testo += "=" * 55 + "\n\n"
@@ -748,31 +772,16 @@ if "prodotto_in_modifica" not in str_lit.session_state:
 if "indice_modifica" not in str_lit.session_state:
   str_lit.session_state.indice_modifica = None
 
-# Demo temporanea Noleggi Confermati: non legge e non scrive su Supabase.
+# Il calendario parte senza appuntamenti fittizi: mostra solo eventi realmente
+# caricati e noleggi aggiunti durante la sessione.
 if "noleggi_demo" not in str_lit.session_state:
-  str_lit.session_state.noleggi_demo = [
-    {"id": 1, "titolo": "Noleggio Villa Aurora", "inizio": datetime(2026, 6, 5, 9, 0), "fine": datetime(2026, 6, 6, 18, 0), "stato": "confermato", "location": "Villa Aurora", "referente": "Marco Bianchi", "telefono": "+39 333 1234567", "note": "Consegna ingresso principale.", "bolla": "Bolla_05062026.pdf", "ddt": "DDT_05062026.pdf", "vario": "Foto_carico.jpg"},
-    {"id": 2, "titolo": "Secondo noleggio", "inizio": datetime(2026, 6, 5, 19, 0), "fine": datetime(2026, 6, 5, 23, 0), "stato": "non confermato", "location": "Villa Aurora", "referente": "Paolo Neri", "telefono": "+39 333 2223344", "note": "Da confermare.", "bolla": "Bolla_2.pdf", "ddt": "DDT_2.pdf", "vario": "Planimetria.pdf"},
-    {"id": 3, "titolo": "Noleggio Tavoli e Sedie", "inizio": datetime(2026, 6, 24, 8, 0), "fine": datetime(2026, 6, 25, 20, 0), "stato": "confermato", "location": "Castello San Marco", "referente": "Andrea Neri", "telefono": "+39 328 9876543", "note": "Ritiro il giorno successivo.", "bolla": "Bolla_24062026.pdf", "ddt": "DDT_24062026.pdf", "vario": "Lista_materiale.pdf"},
-  ]
+  str_lit.session_state.noleggi_demo = []
 if "noleggio_demo_mese" not in str_lit.session_state:
   str_lit.session_state.noleggio_demo_mese = date.today().month
 if "noleggio_demo_anno" not in str_lit.session_state:
   str_lit.session_state.noleggio_demo_anno = date.today().year
-if "evento_catering_demo_iniziale" not in str_lit.session_state:
-  str_lit.session_state.evento_catering_demo_iniziale = {
-      "nome_evento": "Matrimonio Villa Aurora",
-      "data": "2026-06-18",
-      "location": "Villa Aurora",
-      "ospiti": 150,
-      "note_tutti": "Allestimento e orari di servizio da verificare.",
-      "note_magazzino": "Preparare tavoli e sedie.",
-  }
 if "notifiche_demo" not in str_lit.session_state:
-  str_lit.session_state.notifiche_demo = [
-      {"tipo": "catering", "destinatari": ["Sala", "Cucina", "Magazzino"], "testo": "Nuovo evento Catering creato: Matrimonio Villa Aurora."},
-      {"tipo": "noleggio", "destinatari": ["Magazzino"], "testo": "Nuovo noleggio inserito nel calendario: Noleggio Villa Aurora."},
-  ]
+  str_lit.session_state.notifiche_demo = []
 if "notifiche_da_mostrare" not in str_lit.session_state:
   str_lit.session_state.notifiche_da_mostrare = []
 if "evento_catering_demo_selezionato" not in str_lit.session_state:
@@ -883,24 +892,32 @@ def modale_modifica_noleggio_demo(noleggio_id):
 def modale_catering_da_calendario(evento):
   ruolo = (str_lit.session_state.get("utente_loggato") or {}).get("ruolo", "")
   str_lit.markdown(f"## {evento.get('nome_evento', 'Evento Catering')}")
-  col1, col2 = str_lit.columns(2)
+  col1, col2, col3 = str_lit.columns(3)
   with col1:
-    str_lit.markdown(f"**Data:** {evento.get('data_display', evento.get('data', '-'))}")
+    str_lit.markdown(f"**Data:** {data_da_display_evento(evento)}")
     str_lit.markdown(f"**Location:** {evento.get('location', '-')}")
   with col2:
+    str_lit.markdown(f"**Orario:** {orario_evento(evento) or 'Non indicato'}")
     str_lit.markdown(f"**Ospiti:** {evento.get('ospiti', 0)}")
-    str_lit.markdown("**Tipo:** Evento Catering")
+  with col3:
+    str_lit.markdown(f"**Bambini:** {evento.get('bambini', 0)}")
+    str_lit.markdown(f"**Staff:** {evento.get('staff', 0)}")
   str_lit.markdown("---")
   str_lit.markdown("### Note per tutti")
   str_lit.info(evento.get("note_tutti") or "Nessuna nota per tutti.")
-  if ruolo == "Magazzino":
+  if ruolo in {"Magazzino", "Magazzino2"}:
     str_lit.markdown("### Note per il magazzino")
     str_lit.info(evento.get("note_magazzino") or "Nessuna nota specifica per il magazzino.")
 
 
 def mostra_noleggi_demo():
+  # Gli eventi Catering non erano caricati in questa schermata: il calendario
+  # mostrava quindi solo il vecchio evento demo e apriva dettagli errati.
+  if not str_lit.session_state.eventi_caricati:
+    str_lit.session_state.eventi_catering = carica_eventi_solo_quando_servono()
+    str_lit.session_state.eventi_caricati = True
   str_lit.subheader("📅 Noleggi Confermati")
-  str_lit.caption("Anteprima completa con dati dimostrativi. Supabase non viene utilizzato in questa fase.")
+  str_lit.caption("Seleziona un giorno per consultare separatamente noleggi ed eventi Catering.")
   col_mese, col_anno = str_lit.columns([2, 1])
   with col_mese:
     mese = str_lit.selectbox("Mese calendario", list(range(1, 13)), index=str_lit.session_state.noleggio_demo_mese - 1, format_func=lambda m: ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"][m - 1], key="noleggio_mese_select")
@@ -917,10 +934,13 @@ def mostra_noleggi_demo():
   .noleggi-side-panel {background:#f8fafc; border:1px solid #d9e2ec; border-radius:12px; padding:18px; min-height:500px;}
   .noleggi-side-title {font-size:1.2rem; font-weight:800; color:#1d2939; margin-bottom:3px;}
   .noleggi-side-subtitle {font-size:.82rem; color:#667085; margin-bottom:16px;}
-  .noleggi-day-muted {height:70px; background:#f8fafc; border:1px solid #eef2f6; border-radius:8px;}
-  .noleggi-dots {display:flex; justify-content:center; gap:4px; min-height:12px; padding:4px 0 2px;}
-  .noleggi-event-dot {display:inline-block; width:10px; height:10px; border-radius:50%; margin:0 2px;}
-  .noleggi-day-count {font-size:.68rem; color:#667085; margin-left:3px;}
+  .noleggi-day-muted {height:86px; background:#f8fafc; border:1px solid #eef2f6; border-radius:8px;}
+  .noleggi-markers {display:flex; flex-wrap:wrap; justify-content:center; gap:3px; min-height:28px; padding:5px 1px 1px;}
+  .noleggi-marker {display:inline-block; border-radius:999px; padding:3px 5px; color:white; font-size:.55rem; font-weight:800; line-height:1; letter-spacing:.03em; white-space:nowrap;}
+  .noleggi-marker-rental-confirmed {background:#0056b3;}
+  .noleggi-marker-rental-pending {background:#c87800;}
+  .noleggi-marker-catering {background:#7c3aed;}
+  .noleggi-day-empty {font-size:.72rem; color:#98a2b3; padding-top:5px;}
   </style>
   """, unsafe_allow_html=True)
 
@@ -931,10 +951,11 @@ def mostra_noleggi_demo():
     giorno_selezionato = date(int(anno), int(mese), 1)
     str_lit.session_state.noleggio_demo_giorno_selezionato = giorno_selezionato
 
-  eventi_catering_calendario = [str_lit.session_state.evento_catering_demo_iniziale]
-  for evento_catering in str_lit.session_state.get("eventi_catering", []):
-    if evento_catering.get("nome_evento"):
-      eventi_catering_calendario.append(evento_catering)
+  eventi_catering_calendario = [
+      evento_catering
+      for evento_catering in str_lit.session_state.get("eventi_catering", [])
+      if evento_catering.get("nome_evento")
+  ]
 
   def data_catering(evento):
     valore = str(evento.get("data", ""))
@@ -949,8 +970,8 @@ def mostra_noleggi_demo():
   calendario_col, pannello_col = str_lit.columns([1.55, 1], gap="large")
   with calendario_col:
     str_lit.markdown("<div class='noleggi-layout-title'>Calendario mensile</div>", unsafe_allow_html=True)
-    str_lit.markdown(f"<div class='noleggi-month-note'>Seleziona un giorno per vedere i noleggi nel pannello laterale.</div>", unsafe_allow_html=True)
-    str_lit.markdown("<div class='noleggi-legend'><span><i class='noleggi-dot' style='background:#0056b3'></i>Confermato</span><span><i class='noleggi-dot' style='background:#e7a928'></i>Non confermato</span><span><i class='noleggi-dot' style='background:#4b9f9a'></i>Catering</span></div>", unsafe_allow_html=True)
+    str_lit.markdown(f"<div class='noleggi-month-note'>Ogni giorno usa etichette: <b>NOL.</b> per i noleggi e <b>CAT.</b> per gli eventi Catering.</div>", unsafe_allow_html=True)
+    str_lit.markdown("<div class='noleggi-legend'><span><i class='noleggi-dot' style='background:#0056b3'></i>Noleggio confermato</span><span><i class='noleggi-dot' style='background:#c87800'></i>Noleggio da confermare</span><span><i class='noleggi-dot' style='background:#7c3aed'></i>Evento Catering</span></div>", unsafe_allow_html=True)
     intestazioni = str_lit.columns(7, gap="small")
     for col, nome_giorno in zip(intestazioni, ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"]):
       with col:
@@ -971,17 +992,19 @@ def mostra_noleggi_demo():
               str_lit.session_state.noleggio_demo_giorno_selezionato = giorno
               str_lit.session_state.noleggio_demo_crea_data = None
               str_lit.session_state.noleggio_demo_modifica = None
+              str_lit.session_state.evento_catering_demo_selezionato = None
               str_lit.rerun()
-            pallini_html = []
-            for noleggio in eventi_giorno[:4]:
-              colore = "#0056b3" if noleggio["stato"] == "confermato" else "#e7a928"
-              pallini_html.append(f"<span class='noleggi-event-dot' style='background:{colore}' title='{noleggio['titolo']}'></span>")
-            for evento_catering in catering_giorno[:2]:
-              pallini_html.append(f"<span class='noleggi-event-dot' style='background:#4b9f9a' title='Catering: {evento_catering.get('nome_evento', 'Evento Catering')}'></span>")
-            totale_eventi = len(eventi_giorno) + len(catering_giorno)
-            extra = f"<span class='noleggi-day-count'>+{totale_eventi-5}</span>" if totale_eventi > 5 else ""
-            contenuto_pallini = ''.join(pallini_html) if pallini_html else "<span class='noleggi-day-count'>·</span>"
-            str_lit.markdown(f"<div class='noleggi-dots'>{contenuto_pallini}{extra}</div>", unsafe_allow_html=True)
+            noleggi_confermati = sum(n.get("stato") == "confermato" for n in eventi_giorno)
+            noleggi_da_confermare = len(eventi_giorno) - noleggi_confermati
+            marker_html = []
+            if noleggi_confermati:
+              marker_html.append(f"<span class='noleggi-marker noleggi-marker-rental-confirmed'>NOL. {noleggi_confermati}</span>")
+            if noleggi_da_confermare:
+              marker_html.append(f"<span class='noleggi-marker noleggi-marker-rental-pending'>NOL. {noleggi_da_confermare}</span>")
+            if catering_giorno:
+              marker_html.append(f"<span class='noleggi-marker noleggi-marker-catering'>CAT. {len(catering_giorno)}</span>")
+            contenuto_marker = "".join(marker_html) if marker_html else "<span class='noleggi-day-empty'>—</span>"
+            str_lit.markdown(f"<div class='noleggi-markers'>{contenuto_marker}</div>", unsafe_allow_html=True)
 
   with pannello_col:
     eventi_selezionati = [n for n in str_lit.session_state.noleggi_demo if n["inizio"].date() <= giorno_selezionato <= n["fine"].date()]
@@ -991,7 +1014,7 @@ def mostra_noleggi_demo():
       nomi_mesi = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"]
       data_italiana = f"{nomi_giorni[giorno_selezionato.weekday()]} {giorno_selezionato.day} {nomi_mesi[giorno_selezionato.month - 1]} {giorno_selezionato.year}"
       str_lit.markdown(f"<div class='noleggi-side-title'>{data_italiana}</div>", unsafe_allow_html=True)
-      str_lit.markdown("<div class='noleggi-side-subtitle'>Noleggi presenti nella giornata selezionata</div>", unsafe_allow_html=True)
+      str_lit.markdown("<div class='noleggi-side-subtitle'>Eventi Catering e noleggi presenti nella giornata selezionata</div>", unsafe_allow_html=True)
       if str_lit.button("＋ Crea nuovo noleggio", type="primary", use_container_width=True, key="demo_crea_noleggio_laterale"):
         str_lit.session_state.noleggio_demo_crea_data = giorno_selezionato
         str_lit.session_state.noleggio_demo_modifica = None
@@ -1003,8 +1026,10 @@ def mostra_noleggi_demo():
         for indice_catering, evento_catering in enumerate(catering_selezionati):
           if str_lit.button(f"🟢 Catering — {evento_catering.get('nome_evento', 'Evento Catering')}", key=f"cal_catering_{giorno_selezionato}_{indice_catering}", use_container_width=True):
             str_lit.session_state.evento_catering_demo_selezionato = evento_catering
+            str_lit.session_state.noleggio_demo_modifica = None
             str_lit.rerun()
-          str_lit.caption(f"{evento_catering.get('location', 'Location non indicata')} · {evento_catering.get('ospiti', 0)} ospiti")
+          dettagli_orario = orario_evento(evento_catering) or "orario non indicato"
+          str_lit.caption(f"{dettagli_orario} · {evento_catering.get('location', 'Location non indicata')} · {evento_catering.get('ospiti', 0)} ospiti")
         for noleggio in eventi_selezionati:
           colore = "🔵" if noleggio["stato"] == "confermato" else "🟠"
           orario = f"{noleggio['inizio'].strftime('%H:%M')} – {noleggio['fine'].strftime('%H:%M')}"
@@ -1013,6 +1038,7 @@ def mostra_noleggi_demo():
           if str_lit.button(f"{colore} {noleggio['titolo']}\n{orario}", key=f"demo_pannello_noleggio_{noleggio['id']}", use_container_width=True):
             str_lit.session_state.noleggio_demo_modifica = noleggio["id"]
             str_lit.session_state.noleggio_demo_crea_data = None
+            str_lit.session_state.evento_catering_demo_selezionato = None
             str_lit.rerun()
           str_lit.caption(f"{noleggio['location']} · {noleggio['referente']}")
 
@@ -1020,8 +1046,12 @@ def mostra_noleggi_demo():
     modale_crea_noleggio_demo(str_lit.session_state.noleggio_demo_crea_data)
   if str_lit.session_state.get("noleggio_demo_modifica"):
     modale_modifica_noleggio_demo(str_lit.session_state.noleggio_demo_modifica)
-  if str_lit.session_state.get("evento_catering_demo_selezionato"):
-    modale_catering_da_calendario(str_lit.session_state.evento_catering_demo_selezionato)
+  evento_da_aprire = str_lit.session_state.get("evento_catering_demo_selezionato")
+  if evento_da_aprire:
+    # L'azzeramento prima della modale impedisce che il dettaglio Catering
+    # venga riaperto quando si seleziona un altro giorno del calendario.
+    str_lit.session_state.evento_catering_demo_selezionato = None
+    modale_catering_da_calendario(evento_da_aprire)
 
 
 query_params = str_lit.query_params
@@ -1196,7 +1226,7 @@ def modale_gestione_prodotto():
 def modale_crea_evento():
   with str_lit.form("form_nuovo_evento_dialog"):
     str_lit.markdown("#### 📋 Dati Principali dell'Evento")
-    col_n1, col_n2, col_n3 = str_lit.columns(3)
+    col_n1, col_n2, col_n3, col_n4 = str_lit.columns(4)
     with col_n1:
       n_nome = str_lit.text_input("🏷️ Nome Evento / Cliente *")
     with col_n2:
@@ -1205,6 +1235,8 @@ def modale_crea_evento():
           value=date.today().strftime("%d/%m/%Y"),
       )
     with col_n3:
+      n_orario = str_lit.time_input("🕒 Orario evento")
+    with col_n4:
       n_loc = str_lit.text_input("📍 Location")
 
     col_p1, col_p2, col_p3 = str_lit.columns(3)
@@ -1261,7 +1293,7 @@ def modale_crea_evento():
         nuovo_ev = {
             "nome_evento": n_nome,
             "data": dt_parsed.strftime("%Y-%m-%d"),
-            "data_display": n_data.strip(),
+            "data_display": data_display_con_orario(n_data, n_orario),
             "location": n_loc,
             "ospiti": n_ospiti,
             "bambini": n_bambini,
@@ -1321,21 +1353,21 @@ def modale_modifica_evento(idx_ev):
         str_lit.rerun()
     str_lit.stop()
 
+  m_data_precompilata = data_da_display_evento(ev_mod)
   with str_lit.form(f"form_mod_ev_dialog_{idx_ev}"):
     m_nome = str_lit.text_input(
         "Nome Evento / Cliente", value=ev_mod.get("nome_evento", "")
     )
 
-    col_m1, col_m2 = str_lit.columns(2)
+    col_m1, col_m2, col_m3 = str_lit.columns(3)
     with col_m1:
       m_data = str_lit.text_input(
           "Data Evento",
-          value=ev_mod.get(
-              "data_display",
-              ev_mod.get("data", date.today().strftime("%d/%m/%Y")),
-          ),
+          value=m_data_precompilata,
       )
     with col_m2:
+      m_orario = str_lit.time_input("Orario evento", value=orario_per_widget(ev_mod))
+    with col_m3:
       m_loc = str_lit.text_input("Location", value=ev_mod.get("location", ""))
 
     col_mp1, col_mp2, col_mp3 = str_lit.columns(3)
@@ -1430,7 +1462,7 @@ def modale_modifica_evento(idx_ev):
       ev_mod.update({
           "nome_evento": m_nome,
           "data": dt_parsed.strftime("%Y-%m-%d"),
-          "data_display": m_data.strip(),
+          "data_display": data_display_con_orario(m_data, m_orario),
           "location": m_loc,
           "ospiti": m_osp,
           "bambini": m_bam,
@@ -1549,8 +1581,9 @@ else:
         str_lit.session_state.notifiche_da_mostrare = []
         str_lit.rerun()
 
-  # Magazzino2 ha gli stessi permessi del Magazzino, ma non può aprire Catering.
-  if is_magazzino2 and str_lit.session_state.area_selezionata == "opzione_2":
+  # Magazzino 1 e 2 consultano gli eventi dal calendario, senza una scheda
+  # Catering separata; la guardia blocca anche eventuali link di sessione vecchi.
+  if (is_magazzino or is_magazzino2) and str_lit.session_state.area_selezionata == "opzione_2":
     str_lit.session_state.area_selezionata = None
 
   col_top1, col_top2 = str_lit.columns([8, 1])
@@ -1710,7 +1743,12 @@ else:
             str_lit.rerun()
       
     else:
-      c1, c2, c3 = str_lit.columns(3)
+      # Il Magazzino usa due card: Magazzino e Calendario. Gli altri reparti
+      # mantengono la disposizione a tre colonne prevista dalla home.
+      if is_magazzino or is_magazzino2:
+        c1, c2 = str_lit.columns(2)
+      else:
+        c1, c2, _ = str_lit.columns(3)
       with c1:
         if is_magazzino or is_magazzino2:
           with str_lit.container(border=True):
@@ -1743,7 +1781,7 @@ else:
               str_lit.stop()
 
       with c2:
-        if is_magazzino2:
+        if is_magazzino or is_magazzino2:
           with str_lit.container(border=True):
             str_lit.markdown("<div style='height:100px;display:flex;align-items:center;justify-content:center;font-size:3rem;margin-bottom:15px;'>📅</div>", unsafe_allow_html=True)
             str_lit.markdown("### Noleggi Confermati")
@@ -1756,7 +1794,7 @@ else:
               str_lit.session_state.noleggio_demo_crea_data = None
               str_lit.session_state.noleggio_demo_giorno_selezionato = date.today()
               str_lit.rerun()
-        elif is_wedding or is_cucina or is_sala or is_magazzino:
+        elif is_wedding or is_cucina or is_sala:
           with str_lit.container(border=True):
             if logo_catering_b64:
               str_lit.markdown(
@@ -1785,20 +1823,6 @@ else:
               str_lit.session_state.area_selezionata = "opzione_2"
               str_lit.rerun()
               str_lit.stop()
-      with c3:
-        if is_magazzino or is_magazzino2:
-          with str_lit.container(border=True):
-            str_lit.markdown("<div style='height: 100px; display: flex; align-items: center; justify-content: center; font-size: 3rem; margin-bottom: 15px;'>📅</div>", unsafe_allow_html=True)
-            str_lit.markdown("### Noleggi Confermati")
-            str_lit.markdown("<div class='card-desc'>Calendario dei noleggi e degli eventi.</div>", unsafe_allow_html=True)
-            if str_lit.button("Apri Noleggi", use_container_width=True, type="primary", key="btn_h_noleggi_magazzino"):
-              str_lit.session_state.area_selezionata = "opzione_noleggi"
-              str_lit.session_state.noleggio_demo_mese = date.today().month
-              str_lit.session_state.noleggio_demo_anno = date.today().year
-              str_lit.session_state.noleggio_demo_modifica = None
-              str_lit.session_state.noleggio_demo_crea_data = None
-              str_lit.session_state.noleggio_demo_giorno_selezionato = date.today()
-              str_lit.rerun()
 
   else:
     if str_lit.button("⬅️ Torna alla Home"):
