@@ -892,10 +892,11 @@ def modale_modifica_noleggio_demo(noleggio_id):
     return
   utente_corrente = str_lit.session_state.get("utente_loggato") or {}
   ruolo_corrente = utente_corrente.get("ruolo", "")
+  is_magazzino1 = ruolo_corrente in {"Magazzino", "Magazzino1", "Magazzino 1"}
   puo_modificare = ruolo_corrente in {"Amministratore", "Wedding", "Magazzino2"}
   if not puo_modificare:
     str_lit.info("Modalità sola visualizzazione.")
-  if ruolo_corrente == "Magazzino":
+  if is_magazzino1:
     stato_testo = "Confermato" if noleggio.get("stato") == "confermato" else "Non confermato"
     colore_stato = "success" if noleggio.get("stato") == "confermato" else "warning"
     str_lit.markdown(f"## {noleggio.get('titolo', 'Noleggio')}")
