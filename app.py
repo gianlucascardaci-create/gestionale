@@ -1034,7 +1034,7 @@ def mostra_noleggi_demo():
     str_lit.session_state.eventi_caricati = True
 
   mesi = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"]
-  str_lit.markdown(f"<div class='planner-header'><div><div class='planner-kicker'>{'EVENTI CATERING' if solo_catering else 'PIANIFICAZIONE NOLEGGI'}</div><h1>{'Calendario Catering' if solo_catering else 'Calendario Noleggi'}</h1><p>Seleziona una giornata per aprire direttamente l'evento.</p></div></div>", unsafe_allow_html=True)
+  str_lit.markdown(f"<div class='planner-header'><div><div class='planner-kicker'>{'CALENDARIO EVENTI' if solo_catering else 'PIANIFICAZIONE NOLEGGI'}</div><h1>{'Calendario Eventi' if solo_catering else 'Calendario Noleggi'}</h1><p>Seleziona una giornata per aprire direttamente l'evento.</p></div></div>", unsafe_allow_html=True)
   col_mese, col_anno = str_lit.columns([1.4, 1.0])
   with col_mese:
     mese = str_lit.selectbox("Mese", list(range(1, 13)), index=str_lit.session_state.noleggio_demo_mese - 1, format_func=lambda m: mesi[m - 1], key="noleggio_mese_select")
@@ -1058,7 +1058,7 @@ def mostra_noleggi_demo():
           modale_crea_noleggio_demo(str_lit.session_state.get("noleggio_demo_giorno_selezionato", date(int(anno), int(mese), 1)))
     if "catering" in azioni:
       with (a2 if a2 is not None else a1):
-        if str_lit.button("＋ Nuovo Catering", type="primary", use_container_width=True, key="planner_new_catering"):
+        if str_lit.button("＋ Nuovo evento", type="primary", use_container_width=True, key="planner_new_catering"):
           modale_crea_evento(str_lit.session_state.get("noleggio_demo_giorno_selezionato", date(int(anno), int(mese), 1)))
 
   str_lit.markdown("""
@@ -1072,15 +1072,15 @@ def mostra_noleggi_demo():
   .planner-day-card {min-height:66px; border:1px solid #e4e7ec; border-radius:9px; padding:6px; margin-bottom:4px; background:#fff; box-shadow:0 1px 2px rgba(16,24,40,.04);}
   .planner-day-card.weekend {background:#fbfcfe;}
   .planner-day-card.outside {background:#f8fafc; border-color:#f1f3f5; min-height:66px;}
-  .planner-day-card.has-rental {background:#f2f7ff; border-color:#b7d4f7;}
-  .planner-day-card.has-pending {background:#fffaf0; border-color:#f4d58b;}
-  .planner-day-card.has-catering {background:#f1faf4; border-color:#b7e2c3;}
+  .planner-day-card.has-rental {background:#eff6ff; border-color:#93c5fd;}
+  .planner-day-card.has-pending {background:#fff7ed; border-color:#fdba74;}
+  .planner-day-card.has-catering {background:#f0fdf4; border-color:#86efac;}
   .planner-number {font-size:1.15rem; font-weight:850; color:#243b53;}
   .planner-number.today {color:#0056b3;}
   .planner-event {font-size:.56rem; font-weight:750; margin-top:4px; padding:3px 4px; border-radius:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .planner-event.rental {background:#dbeafe; color:#174a7c;}
-  .planner-event.pending {background:#fef3c7; color:#854d0e;}
-  .planner-event.catering {background:#dcfce7; color:#166534;}
+  .planner-event.rental {background:#bfdbfe; color:#1e3a8a;}
+  .planner-event.pending {background:#fed7aa; color:#9a3412;}
+  .planner-event.catering {background:#bbf7d0; color:#166534;}
   .planner-empty {font-size:.56rem; color:#a0aec0; margin-top:7px;}
   div[data-testid='stButton'] button[kind='secondary'] {border-radius:7px; min-height:22px; height:22px; padding:0 4px; font-size:.72rem; line-height:1;}
   </style>
@@ -1104,9 +1104,9 @@ def mostra_noleggi_demo():
 
   legenda = []
   if mostra_noleggi:
-    legenda += ["<span><i style='background:#dbeafe'></i>Noleggio confermato</span>", "<span><i style='background:#fef3c7'></i>Da confermare</span>"]
+    legenda += ["<span><i style='background:#bfdbfe'></i>Noleggio confermato</span>", "<span><i style='background:#fed7aa'></i>Da confermare</span>"]
   if mostra_catering:
-    legenda.append("<span><i style='background:#dcfce7'></i>Catering</span>")
+    legenda.append("<span><i style='background:#bbf7d0'></i>Evento Catering</span>")
   str_lit.markdown("<div class='planner-legend'>" + "".join(legenda) + "</div><style>.planner-legend{display:flex;gap:18px;margin:10px 0 14px;color:#667085;font-size:.78rem}.planner-legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}</style>", unsafe_allow_html=True)
   giorni_settimana = str_lit.columns(7, gap="small")
   for col, nome in zip(giorni_settimana, ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"]):
@@ -1350,15 +1350,16 @@ def modale_gestione_prodotto():
 def modale_crea_evento(data_precompilata=None):
   with str_lit.form("form_nuovo_evento_dialog"):
     str_lit.markdown("#### 📋 Dati Principali dell'Evento")
-    col_n1, col_n2, col_n3, col_n4 = str_lit.columns(4)
+    col_n1, col_n2 = str_lit.columns(2)
     with col_n1:
       n_nome = str_lit.text_input("🏷️ Nome Evento / Cliente *")
     with col_n2:
-      n_data = selettore_data_italiano("📅 Data Evento", data_precompilata or date.today(), "crea_catering_data_evento")
-    with col_n3:
-      n_orario = str_lit.time_input("🕒 Orario evento")
-    with col_n4:
       n_loc = str_lit.text_input("📍 Location")
+    col_ndata, col_nora = str_lit.columns(2)
+    with col_ndata:
+      n_data = selettore_data_italiano("📅 Data Evento", data_precompilata or date.today(), "crea_catering_data_evento")
+    with col_nora:
+      n_orario = str_lit.time_input("🕒 Orario evento", key="crea_catering_orario_evento")
 
     col_p1, col_p2, col_p3 = str_lit.columns(3)
     with col_p1:
@@ -1480,15 +1481,18 @@ def modale_modifica_evento(idx_ev):
         "Nome Evento / Cliente", value=ev_mod.get("nome_evento", "")
     )
 
-    col_m1, col_m2, col_m3 = str_lit.columns(3)
+    col_m1, col_m2 = str_lit.columns(2)
     with col_m1:
       m_data = selettore_data_italiano(
           "Data Evento", parse_data_evento(ev_mod.get("data")).date(), f"modifica_catering_data_{idx_ev}"
       )
     with col_m2:
-      m_orario = str_lit.time_input("Orario evento", value=orario_per_widget(ev_mod))
-    with col_m3:
       m_loc = str_lit.text_input("Location", value=ev_mod.get("location", ""))
+    col_mora, col_mosp = str_lit.columns(2)
+    with col_mora:
+      m_orario = str_lit.time_input("Orario evento", value=orario_per_widget(ev_mod), key=f"modifica_catering_orario_{idx_ev}")
+    with col_mosp:
+      str_lit.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
 
     col_mp1, col_mp2, col_mp3 = str_lit.columns(3)
     with col_mp1:
@@ -1698,7 +1702,7 @@ else:
 
   col_top1, col_top2 = str_lit.columns([8, 1])
   with col_top2:
-    if str_lit.button("Esci", key="btn_esci_app", use_container_width=True):
+    if str_lit.button("⎋ Esci", key="btn_esci_app", use_container_width=True, type="secondary"):
       str_lit.session_state.utente_loggato = None
       str_lit.session_state.area_selezionata = None
       str_lit.rerun()
@@ -1943,7 +1947,7 @@ else:
               str_lit.stop()
 
   else:
-    if str_lit.button("⬅️ Torna alla Home"):
+    if str_lit.button("← Torna alla Home", key="btn_torna_home", type="secondary", use_container_width=True):
       str_lit.session_state.area_selezionata = None
       str_lit.session_state.modale_prodotto = None
       str_lit.query_params.clear()
