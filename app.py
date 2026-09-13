@@ -1069,6 +1069,7 @@ def modale_modifica_noleggio_demo(noleggio_id):
         str_lit.session_state.noleggio_demo_eliminazione_in_attesa = None
         str_lit.rerun()
     return
+  allegati_modifica = {}
   with str_lit.form(f"form_modifica_noleggio_demo_{noleggio_id}"):
     titolo = str_lit.text_input("Nome del noleggio", noleggio["titolo"], disabled=not puo_modificare)
     col_a, col_b = str_lit.columns(2)
@@ -1089,6 +1090,19 @@ def modale_modifica_noleggio_demo(noleggio_id):
     if ruolo_corrente in {"Amministratore", "Magazzino2", "Magazzino"}:
       str_lit.write(f"DDT: `{noleggio['ddt']}`")
       str_lit.write(f"Vario: `{noleggio['vario']}`")
+    if puo_modificare:
+      str_lit.markdown("#### Aggiungi o rimuovi allegati")
+      campi_upload = []
+      if ruolo_corrente in {"Amministratore", "Magazzino2"}:
+        campi_upload.append(("Bolla con prezzo", "bolla"))
+      campi_upload.extend([("DDT", "ddt"), ("Vario", "vario")])
+      for etichetta_upload, campo_upload in campi_upload:
+        col_up1, col_up2 = str_lit.columns([1.4, 2.6])
+        with col_up1:
+          rimuovi = str_lit.checkbox(f"Rimuovi {etichetta_upload}", key=f"rimuovi_{campo_upload}_{noleggio_id}")
+        with col_up2:
+          nuovo_file = str_lit.file_uploader(f"Aggiungi/sostituisci {etichetta_upload}", type=["pdf", "jpg", "jpeg", "png"], key=f"upload_{campo_upload}_{noleggio_id}")
+        allegati_modifica[campo_upload] = (rimuovi, nuovo_file)
     col_comandi1, col_comandi2 = str_lit.columns(2)
     with col_comandi1:
       salva = str_lit.form_submit_button("Salva modifiche", type="primary", use_container_width=True, disabled=not puo_modificare)
@@ -1114,6 +1128,15 @@ def modale_modifica_noleggio_demo(noleggio_id):
 
   if salva:
     noleggio.update({"titolo": titolo, "inizio": datetime.combine(data_inizio, ora_inizio), "fine": datetime.combine(data_fine, ora_fine), "location": location, "referente": referente, "telefono": telefono, "note": note, "stato": "confermato" if stato == "Confermato" else "non confermato"})
+    for campo_upload, (rimuovi, nuovo_file) in allegati_modifica.items():
+      if rimuovi:
+        noleggio[campo_upload] = "Nessun file"
+        noleggio[f"{campo_upload}_dati_b64"] = ""
+        noleggio[f"{campo_upload}_mime"] = "application/octet-stream"
+      if nuovo_file is not None:
+        noleggio[campo_upload] = nuovo_file.name
+        noleggio[f"{campo_upload}_dati_b64"] = base64.b64encode(nuovo_file.getvalue()).decode("ascii")
+        noleggio[f"{campo_upload}_mime"] = nuovo_file.type or "application/octet-stream"
     try:
       salva_noleggio_supabase(noleggio)
     except Exception as errore:
