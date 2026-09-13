@@ -196,19 +196,39 @@ str_lit.markdown(
         margin-bottom: 15px;
     }
     @media (max-width: 1100px) {
-        .block-container {padding-left: 1.2rem !important; padding-right: 1.2rem !important;}
+        .block-container {max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important;}
         .card-desc {font-size: .9rem; min-height: 38px;}
-        h1 {font-size: 2rem !important;}
-        h2 {font-size: 1.35rem !important;}
-        .stButton > button {min-height: 2.5rem !important; white-space: normal !important;}
+        h1 {font-size: 1.8rem !important;}
+        h2 {font-size: 1.3rem !important;}
+        .stButton > button {min-height: 2.65rem !important; white-space: normal !important;}
+        [data-testid="stHorizontalBlock"] {gap: .75rem !important;}
     }
     @media (max-width: 760px) {
-        .block-container {padding-left: .65rem !important; padding-right: .65rem !important;}
-        .card-desc {font-size: .82rem; min-height: auto;}
+        .block-container {max-width: 100% !important; padding: .7rem .55rem 2rem !important;}
+        .card-desc {font-size: .9rem; min-height: auto; line-height: 1.35;}
+        .stMarkdown h1 {font-size: 1.45rem !important; line-height: 1.15 !important;}
+        .stMarkdown h2 {font-size: 1.25rem !important;}
         .stMarkdown h3 {font-size: 1.05rem !important;}
-        [data-testid="stHorizontalBlock"] {gap: .5rem !important;}
-        .stButton > button {font-size: .86rem !important; padding: .35rem .45rem !important;}
-        [data-testid="stDataFrame"] {font-size: .82rem !important;}
+        [data-testid="stHorizontalBlock"] {gap: .55rem !important; align-items: stretch !important;}
+        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)) {flex-wrap: wrap !important;}
+        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)) > [data-testid="column"] {flex: 1 1 100% !important; min-width: 100% !important; width: 100% !important;}
+        .stButton > button, .stDownloadButton > button, .stFormSubmitButton > button {font-size: .92rem !important; min-height: 2.8rem !important; padding: .55rem .7rem !important; white-space: normal !important; line-height: 1.15 !important;}
+        [data-testid="stTextInput"] input, [data-testid="stTextArea"] textarea, [data-baseweb="select"] > div {font-size: 1rem !important;}
+        [data-testid="stFileUploader"] {font-size: .9rem !important;}
+        [data-testid="stDataFrame"] {font-size: .86rem !important; overflow-x: auto !important;}
+        .planner-header {padding: 10px 12px !important;}
+        .planner-header h1 {font-size: 1.2rem !important;}
+        .planner-legend {flex-wrap: wrap !important; gap: 8px 12px !important; font-size: .78rem !important;}
+        .planner-week span {font-size: .62rem !important;}
+        [data-testid="stHorizontalBlock"]:has(.planner-day-card) {overflow-x: auto !important; flex-wrap: nowrap !important; padding-bottom: 4px !important;}
+        [data-testid="stHorizontalBlock"]:has(.planner-day-card) > [data-testid="column"] {flex: 0 0 108px !important; min-width: 108px !important; width: 108px !important;}
+        .planner-day-card {min-height: 78px !important; padding: 7px !important;}
+    }
+    @media (max-width: 420px) {
+        .block-container {padding-left: .4rem !important; padding-right: .4rem !important;}
+        .planner-day-card {min-height: 74px !important;}
+        .planner-event {font-size: .59rem !important;}
+        .stButton > button, .stDownloadButton > button, .stFormSubmitButton > button {font-size: .9rem !important;}
     }
 </style>
 """,
