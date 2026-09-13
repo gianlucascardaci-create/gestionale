@@ -663,34 +663,35 @@ def mostra_allegato_magazzino(nome_file, dati_b64, mime, chiave):
     str_lit.info(f"Anteprima non disponibile per {nome_file}.")
     return
   dati = base64.b64decode(dati_b64)
-  with str_lit.expander(f"Apri anteprima: {nome_file}", expanded=False):
-    if mime.startswith("image/"):
-      str_lit.image(dati, width=420)
-      str_lit.caption("Anteprima compatta del documento.")
-    elif mime == "application/pdf":
-      if convert_from_bytes:
-        try:
-          pagina = convert_from_bytes(dati, dpi=100, first_page=1, last_page=1)[0]
-          buffer = BytesIO()
-          pagina.save(buffer, format="PNG", optimize=True)
-          immagine_b64 = base64.b64encode(buffer.getvalue()).decode("ascii")
-          components.html(
-              f'''<div style="font-family:Arial;text-align:center;background:#f8fafc;padding:8px;border:1px solid #d0d5dd;border-radius:8px;">
-              <button onclick="window.print()" style="background:#0056b3;color:white;border:0;border-radius:6px;padding:7px 16px;font-weight:700;cursor:pointer;margin-bottom:8px;">Stampa anteprima</button>
-              <img src="data:image/png;base64,{immagine_b64}" style="max-width:100%;max-height:330px;object-fit:contain;display:block;margin:auto;">
-              </div>''',
-              height=370,
-              scrolling=True,
-          )
-          str_lit.caption("Mostrata la prima pagina in anteprima compatta.")
-        except Exception:
-          pdf_b64 = base64.b64encode(dati).decode("ascii")
-          components.html(f'<iframe src="data:application/pdf;base64,{pdf_b64}" width="100%" height="360px"></iframe>', height=380, scrolling=True)
-      else:
-        pdf_b64 = base64.b64encode(dati).decode("ascii")
-        components.html(f'<iframe src="data:application/pdf;base64,{pdf_b64}" width="100%" height="360px"></iframe>', height=380, scrolling=True)
+  dati_uri = f"data:{mime};base64,{dati_b64}"
+  if mime.startswith("image/"):
+    components.html(
+        f'''<a href="{dati_uri}" target="_blank" rel="noopener" title="Apri {nome_file}" style="display:block;text-decoration:none;color:#344054;">
+        <img src="{dati_uri}" style="max-width:420px;max-height:220px;object-fit:contain;display:block;border:1px solid #d0d5dd;border-radius:8px;padding:4px;background:#f8fafc;">
+        <span style="display:block;font:600 13px Arial;margin-top:5px;">Apri allegato: {nome_file}</span></a>''',
+        height=255,
+        scrolling=False,
+    )
+  elif mime == "application/pdf":
+    if convert_from_bytes:
+      try:
+        pagina = convert_from_bytes(dati, dpi=90, first_page=1, last_page=1)[0]
+        buffer = BytesIO()
+        pagina.save(buffer, format="PNG", optimize=True)
+        immagine_b64 = base64.b64encode(buffer.getvalue()).decode("ascii")
+        components.html(
+            f'''<a href="{dati_uri}" target="_blank" rel="noopener" title="Apri {nome_file}" style="display:block;text-decoration:none;color:#344054;">
+            <img src="data:image/png;base64,{immagine_b64}" style="max-width:420px;max-height:220px;object-fit:contain;display:block;border:1px solid #d0d5dd;border-radius:8px;padding:4px;background:#f8fafc;">
+            <span style="display:block;font:600 13px Arial;margin-top:5px;">Apri PDF: {nome_file}</span></a>''',
+            height=255,
+            scrolling=False,
+        )
+      except Exception:
+        components.html(f'<a href="{dati_uri}" target="_blank" rel="noopener">Apri PDF: {nome_file}</a>', height=35, scrolling=False)
     else:
-      str_lit.info("Anteprima non disponibile per questo formato.")
+      components.html(f'<a href="{dati_uri}" target="_blank" rel="noopener">Apri PDF: {nome_file}</a>', height=35, scrolling=False)
+  else:
+    str_lit.info("Anteprima non disponibile per questo formato.")
 
 
 def genera_testo_lista_attrezzature(nome_evento, lista_prodotti):
