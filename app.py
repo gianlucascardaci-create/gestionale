@@ -357,11 +357,14 @@ def payload_noleggio(noleggio):
 def salva_noleggio_supabase(noleggio):
   payload = payload_noleggio(noleggio)
   if noleggio.get("id"):
-    res = supabase.table("noleggi").update(payload).eq("id", noleggio["id"]).select("*").single().execute()
+    res = supabase.table("noleggi").update(payload).eq("id", noleggio["id"]).select("*").execute()
   else:
-    res = supabase.table("noleggi").insert(payload).select("*").single().execute()
-    if res.data:
-      noleggio.update(normalizza_noleggio_db(res.data[0]))
+    res = supabase.table("noleggi").insert(payload).select("*").execute()
+  dati_risposta = res.data or []
+  if isinstance(dati_risposta, dict):
+    dati_risposta = [dati_risposta]
+  if dati_risposta:
+    noleggio.update(normalizza_noleggio_db(dati_risposta[0]))
   return bool(res.data)
 
 
