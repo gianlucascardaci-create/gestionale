@@ -357,9 +357,9 @@ def payload_noleggio(noleggio):
 def salva_noleggio_supabase(noleggio):
   payload = payload_noleggio(noleggio)
   if noleggio.get("id"):
-    res = supabase.table("noleggi").update(payload).eq("id", noleggio["id"]).execute()
+    res = supabase.table("noleggi").update(payload).eq("id", noleggio["id"]).select("*").single().execute()
   else:
-    res = supabase.table("noleggi").insert(payload).execute()
+    res = supabase.table("noleggi").insert(payload).select("*").single().execute()
     if res.data:
       noleggio.update(normalizza_noleggio_db(res.data[0]))
   return bool(res.data)
@@ -369,7 +369,7 @@ def elimina_noleggio_supabase(noleggio_id):
   return bool(supabase.table("noleggi").delete().eq("id", noleggio_id).execute().data)
 
 
-@str_lit.cache_data(ttl=600, show_spinner=False)
+@str_lit.cache_data(ttl=30, show_spinner=False)
 def carica_dati_esterni():
   try:
     # Vengono richiesti solo i campi necessari; gli allegati restano nel DB
@@ -381,7 +381,8 @@ def carica_dati_esterni():
     try:
       res_nol = supabase.table("noleggi").select("*").order("inizio").execute()
       noleggi = [normalizza_noleggio_db(r) for r in (res_nol.data or [])]
-    except Exception:
+    except Exception as errore_noleggi:
+      str_lit.error(f"Errore caricamento tabella noleggi da Supabase: {errore_noleggi}")
       noleggi = []
 
     # Gli eventi vengono caricati solo entrando nella sezione Catering o Liste.
