@@ -1031,22 +1031,14 @@ def modale_modifica_noleggio_demo(noleggio_id):
         dati = noleggio.get(f"{campo}_dati_b64", "")
         mime = noleggio.get(f"{campo}_mime", "application/octet-stream")
         str_lit.markdown(f"**{etichetta}:** `{nome}`")
-        if dati:
-          dati_allegato = base64.b64decode(dati)
-          with str_lit.expander(f"Apri anteprima {etichetta}", expanded=False):
-            if mime.startswith("image/"):
-              str_lit.image(dati_allegato, width=420)
-              str_lit.caption("Per stampare: apri l'immagine in una nuova scheda e usa Stampa.")
-            elif mime == "application/pdf":
-              href_pdf = f"data:application/pdf;base64,{dati}"
-              str_lit.markdown(
-                  f'<a href="{href_pdf}" target="_blank" rel="noopener">Apri PDF in una nuova scheda e stampa</a>',
-                  unsafe_allow_html=True,
-              )
-            else:
-              str_lit.info("Anteprima non disponibile per questo formato. Apri il file dalla nuova scheda del browser per stamparlo.")
-        else:
-          str_lit.info("Anteprima non disponibile per questo allegato demo.")
+        str_lit.download_button(
+            f"📥 Scarica allegato {etichetta}",
+            data=base64.b64decode(dati) if dati else f"Allegato: {nome}".encode("utf-8"),
+            file_name=nome,
+            mime=mime,
+            key=f"magazzino_download_{noleggio_id}_{campo}",
+            use_container_width=True,
+        )
     if not presenti:
       str_lit.info("Nessun allegato disponibile.")
     return
@@ -1097,11 +1089,13 @@ def modale_modifica_noleggio_demo(noleggio_id):
         campi_upload.append(("Bolla con prezzo", "bolla"))
       campi_upload.extend([("DDT", "ddt"), ("Vario", "vario")])
       for etichetta_upload, campo_upload in campi_upload:
-        col_up1, col_up2 = str_lit.columns([1.4, 2.6])
-        with col_up1:
-          rimuovi = str_lit.checkbox(f"Rimuovi {etichetta_upload}", key=f"rimuovi_{campo_upload}_{noleggio_id}")
-        with col_up2:
-          nuovo_file = str_lit.file_uploader(f"Aggiungi/sostituisci {etichetta_upload}", type=["pdf", "jpg", "jpeg", "png"], key=f"upload_{campo_upload}_{noleggio_id}")
+        with str_lit.container(border=True):
+          str_lit.markdown(f"**{etichetta_upload}**")
+          col_up1, col_up2 = str_lit.columns([1.25, 2.75])
+          with col_up1:
+            rimuovi = str_lit.checkbox("Rimuovi", key=f"rimuovi_{campo_upload}_{noleggio_id}")
+          with col_up2:
+            nuovo_file = str_lit.file_uploader("Aggiungi o sostituisci", type=["pdf", "jpg", "jpeg", "png"], key=f"upload_{campo_upload}_{noleggio_id}", label_visibility="visible")
         allegati_modifica[campo_upload] = (rimuovi, nuovo_file)
     col_comandi1, col_comandi2 = str_lit.columns(2)
     with col_comandi1:
@@ -1116,15 +1110,13 @@ def modale_modifica_noleggio_demo(noleggio_id):
     allegati_visibili.extend([("DDT", "ddt"), ("Vario", "vario")])
   for etichetta_allegato, campo_allegato in allegati_visibili:
     nome_allegato = noleggio.get(campo_allegato) or "Nessun file"
-    col_file, col_scarica = str_lit.columns([3, 1])
-    with col_file:
-      str_lit.write(f"**{etichetta_allegato}:** `{nome_allegato}`")
-    if nome_allegato != "Nessun file":
-      dati_b64 = noleggio.get(f"{campo_allegato}_dati_b64", "")
-      mime_allegato = noleggio.get(f"{campo_allegato}_mime", "application/octet-stream")
-      with col_scarica:
+    with str_lit.container(border=True):
+      str_lit.markdown(f"**{etichetta_allegato}:** `{nome_allegato}`")
+      if nome_allegato != "Nessun file":
+        dati_b64 = noleggio.get(f"{campo_allegato}_dati_b64", "")
+        mime_allegato = noleggio.get(f"{campo_allegato}_mime", "application/octet-stream")
         dati_download = base64.b64decode(dati_b64) if dati_b64 else f"Allegato demo: {nome_allegato}".encode("utf-8")
-        str_lit.download_button("Scarica", data=dati_download, file_name=nome_allegato, mime=mime_allegato, key=f"scarica_demo_{noleggio_id}_{campo_allegato}", use_container_width=True)
+        str_lit.download_button("📥 Scarica allegato", data=dati_download, file_name=nome_allegato, mime=mime_allegato, key=f"scarica_demo_{noleggio_id}_{campo_allegato}", use_container_width=True)
 
   if salva:
     noleggio.update({"titolo": titolo, "inizio": datetime.combine(data_inizio, ora_inizio), "fine": datetime.combine(data_fine, ora_fine), "location": location, "referente": referente, "telefono": telefono, "note": note, "stato": "confermato" if stato == "Confermato" else "non confermato"})
@@ -1174,15 +1166,13 @@ def modale_catering_da_calendario(evento):
       nome_allegato = allegato.get("nome_file", f"allegato_{chiave}_{indice}")
       dati_b64 = allegato.get("dati_b64", "")
       mime_allegato = allegato.get("mime", "application/octet-stream")
-      if magazzino_1:
-        mostra_allegato_magazzino(nome_allegato, dati_b64, mime_allegato, f"evento_{chiave}_{indice}")
-      else:
-        str_lit.download_button(
-            f"📥 Scarica allegato: {nome_allegato}",
-            data=base64.b64decode(dati_b64),
-            file_name=nome_allegato,
-            key=f"calendario_{chiave}_{evento.get('id', evento.get('nome_evento', 'evento'))}_{indice}",
-        )
+      str_lit.download_button(
+          f"📥 Scarica allegato: {nome_allegato}",
+          data=base64.b64decode(dati_b64),
+          file_name=nome_allegato,
+          mime=mime_allegato,
+          key=f"calendario_{chiave}_{evento.get('id', evento.get('nome_evento', 'evento'))}_{indice}",
+      )
 
   mostra_note_calendario("Note per tutti", "note_tutti", "allegati_tutti", "tutti")
   sezioni_visibili = {
@@ -1224,6 +1214,11 @@ def mostra_noleggi_demo():
   ruolo = (str_lit.session_state.get("utente_loggato") or {}).get("ruolo", "")
   tipo = str_lit.session_state.get("tipo_calendario", "noleggi")
   solo_catering = tipo == "catering" or ruolo in {"Sala", "Cucina", "Wedding"}
+  if solo_catering:
+    str_lit.session_state.noleggio_demo_modifica = None
+    str_lit.session_state.noleggio_demo_crea_data = None
+    str_lit.session_state.noleggio_demo_eliminazione_in_attesa = None
+    str_lit.session_state.eventi_da_scegliere = []
   mostra_noleggi = not solo_catering and tipo == "noleggi"
   mostra_catering = tipo == "catering" or (tipo == "noleggi" and ruolo in {"Magazzino", "Amministratore"})
   puo_creare_noleggio = mostra_noleggi and ruolo in {"Amministratore", "Magazzino2"}
@@ -2372,15 +2367,13 @@ else:
                 if allegati:
                   str_lit.markdown(f"📎 **Allegati {titolo.replace('Note per ', '')}:**")
                   for att in allegati:
-                    if is_magazzino:
-                      mostra_allegato_magazzino(att["nome_file"], att["dati_b64"], att.get("mime", "application/octet-stream"), f"vecchio_{prefisso}_{idx_ev}")
-                    else:
-                      str_lit.download_button(
-                          f"📥 Scarica allegato: {att['nome_file']}",
-                          data=base64.b64decode(att["dati_b64"]),
-                          file_name=att["nome_file"],
-                          key=f"dl_{prefisso}_{idx_ev}_{att['nome_file']}",
-                      )
+                    str_lit.download_button(
+                        f"📥 Scarica allegato: {att['nome_file']}",
+                        data=base64.b64decode(att["dati_b64"]),
+                        file_name=att["nome_file"],
+                        mime=att.get("mime", "application/octet-stream"),
+                        key=f"dl_{prefisso}_{idx_ev}_{att['nome_file']}",
+                    )
 
               mostra_sezione_note(
                   "Note per tutti", ev.get("note_tutti"),
@@ -2427,7 +2420,13 @@ else:
                 str_lit.success(ev.get("note_magazzino") or "Nessuna nota.")
                 if ev.get("allegati_magazzino"):
                   for att in ev.get("allegati_magazzino"):
-                    mostra_allegato_magazzino(att["nome_file"], att["dati_b64"], att.get("mime", "application/octet-stream"), f"vecchio_mag_{idx_ev}")
+                    str_lit.download_button(
+                        f"📥 Scarica allegato: {att['nome_file']}",
+                        data=base64.b64decode(att["dati_b64"]),
+                        file_name=att["nome_file"],
+                        mime=att.get("mime", "application/octet-stream"),
+                        key=f"dl_mag_{idx_ev}_{att['nome_file']}",
+                    )
 
     elif str_lit.session_state.area_selezionata == "opzione_3":
       if is_admin:
