@@ -962,7 +962,7 @@ def modale_crea_noleggio_demo(data_selezionata):
       str_lit.error("Compila nome, location, referente e numero di telefono.")
     else:
       nuovo_noleggio = {
-          "id": nuovo_id, "titolo": titolo, "inizio": datetime.combine(data_inizio, ora_inizio),
+          "id": None, "titolo": titolo, "inizio": datetime.combine(data_inizio, ora_inizio),
           "fine": datetime.combine(data_fine, ora_fine), "stato": "confermato" if stato == "Confermato" else "non confermato",
           "location": location, "referente": referente, "telefono": telefono, "note": note,
           "bolla": bolla.name if bolla else "Nessun file", "ddt": ddt.name if ddt else "Nessun file", "vario": vario.name if vario else "Nessun file",
