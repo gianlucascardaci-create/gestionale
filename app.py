@@ -236,6 +236,9 @@ str_lit.markdown(
         [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"] {flex: 0 0 calc(25% - .75rem) !important;}
         [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"] {min-height: 420px !important;}
         [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"] > div:first-child {height: 420px !important; min-height: 420px !important;}
+        [data-testid="stHorizontalBlock"]:has(.card-desc) [data-testid="stVerticalBlockBorderWrapper"] {display:flex !important; flex-direction:column !important; min-height:420px !important;}
+        [data-testid="stHorizontalBlock"]:has(.card-desc) [data-testid="stVerticalBlockBorderWrapper"] > div {display:flex !important; flex-direction:column !important; height:100% !important;}
+        [data-testid="stHorizontalBlock"]:has(.card-desc) [data-testid="stButton"] {margin-top:auto !important;}
         [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {flex-wrap: wrap !important;}
         [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) > [data-testid="stColumn"] {flex: 0 0 calc(25% - .5rem) !important;}
     }
@@ -244,6 +247,9 @@ str_lit.markdown(
         [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"] {flex: 0 0 calc(33.333% - .7rem) !important;}
         [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"] {min-height: 420px !important;}
         [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"] > div:first-child {height: 420px !important; min-height: 420px !important;}
+        [data-testid="stHorizontalBlock"]:has(.card-desc) [data-testid="stVerticalBlockBorderWrapper"] {display:flex !important; flex-direction:column !important; min-height:420px !important;}
+        [data-testid="stHorizontalBlock"]:has(.card-desc) [data-testid="stVerticalBlockBorderWrapper"] > div {display:flex !important; flex-direction:column !important; height:100% !important;}
+        [data-testid="stHorizontalBlock"]:has(.card-desc) [data-testid="stButton"] {margin-top:auto !important;}
         [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) > [data-testid="stColumn"] {flex: 0 0 calc(33.333% - .45rem) !important;}
     }
     @media (max-width: 520px) {
