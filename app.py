@@ -195,13 +195,57 @@ str_lit.markdown(
         font-size: 1rem;
         margin-bottom: 15px;
     }
-    /* Stabilizzazione: manteniamo il layout nativo delle colonne Streamlit. */
+    /* Layout mirato: agisce solo sulle card Dashboard e Inventario. */
     [data-testid="stMain"] .block-container {
         width: 100% !important;
         max-width: none !important;
         margin: 0 auto !important;
     }
     [data-testid="stMarkdownContainer"] {overflow-wrap: anywhere !important;}
+    /* Dashboard: 5 grande, 4 laptop, 3 iPad. */
+    [data-testid="stHorizontalBlock"]:has(.card-desc) {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        align-items: stretch !important;
+        gap: 1rem !important;
+    }
+    [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"] {
+        min-width: 0 !important;
+        flex: 1 1 0 !important;
+        width: auto !important;
+        max-width: none !important;
+    }
+    [data-testid="stHorizontalBlock"]:has(.card-desc) [data-testid="stVerticalBlockBorderWrapper"] {
+        height: 100% !important;
+    }
+    /* Inventario: 8 grande, 4 laptop, 3 iPad. */
+    [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        align-items: stretch !important;
+        gap: .65rem !important;
+    }
+    [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) > [data-testid="stColumn"] {
+        min-width: 0 !important;
+        flex: 1 1 0 !important;
+        width: auto !important;
+        max-width: none !important;
+    }
+    @media (max-width: 1500px) and (min-width: 821px) {
+        [data-testid="stHorizontalBlock"]:has(.card-desc) {flex-wrap: wrap !important;}
+        [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"] {flex: 0 0 calc(25% - .75rem) !important;}
+        [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {flex-wrap: wrap !important;}
+        [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) > [data-testid="stColumn"] {flex: 0 0 calc(25% - .5rem) !important;}
+    }
+    @media (max-width: 820px) and (min-width: 521px) {
+        [data-testid="stHorizontalBlock"]:has(.card-desc), [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {flex-wrap: wrap !important;}
+        [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"] {flex: 0 0 calc(33.333% - .7rem) !important;}
+        [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) > [data-testid="stColumn"] {flex: 0 0 calc(33.333% - .45rem) !important;}
+    }
+    @media (max-width: 520px) {
+        [data-testid="stHorizontalBlock"]:has(.card-desc), [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {flex-wrap: wrap !important;}
+        [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"], [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) > [data-testid="stColumn"] {flex: 0 0 100% !important;}
+    }
     @media (max-width: 1100px) {
         [data-testid="stMain"] .block-container {
             padding-left: 1rem !important;
@@ -1919,7 +1963,15 @@ else:
   elif str_lit.session_state.area_selezionata == "opzione_2":
     str_lit.session_state.area_selezionata = "opzione_noleggi"
 
-  col_top1, col_top2 = str_lit.columns([7.2, 1.45])
+  col_top1, col_top_center, col_top2 = str_lit.columns([1.45, 7.2, 1.45])
+  with col_top1:
+    if str_lit.session_state.area_selezionata is not None:
+      if str_lit.button("Torna alla Home", key="btn_torna_home_top", type="secondary", use_container_width=True):
+        str_lit.session_state.area_selezionata = None
+        str_lit.session_state.modale_prodotto = None
+        str_lit.query_params.clear()
+        str_lit.rerun()
+        str_lit.stop()
   with col_top2:
     if str_lit.button("Esci", key="btn_esci_app", use_container_width=True, type="secondary"):
       str_lit.session_state.utente_loggato = None
@@ -2166,15 +2218,6 @@ else:
               str_lit.stop()
 
   else:
-    col_home, _ = str_lit.columns([1.45, 7.2])
-    with col_home:
-      if str_lit.button("Torna alla Home", key="btn_torna_home", type="secondary", use_container_width=True):
-        str_lit.session_state.area_selezionata = None
-        str_lit.session_state.modale_prodotto = None
-        str_lit.query_params.clear()
-        str_lit.rerun()
-        str_lit.stop()
-
     if str_lit.session_state.area_selezionata == "opzione_noleggi":
       mostra_noleggi_demo()
 
@@ -2236,11 +2279,11 @@ else:
       </style>
       """, unsafe_allow_html=True)
 
-      # Ventiquattro slot per blocco: il CSS responsive li dispone in 8
-      # colonne sui monitor grandi, 4 sui laptop e 3 su iPad.
-      for riga_start in range(0, len(prodotti_da_mostrare), 24):
-        blocco_prodotti = prodotti_da_mostrare[riga_start:riga_start + 24]
-        colonne_griglia = str_lit.columns(24, gap="medium")
+      # Otto colonne reali sul monitor grande; il CSS le dispone in 4 sui
+      # laptop e 3 su iPad senza creare colonne artificiali vuote.
+      for riga_start in range(0, len(prodotti_da_mostrare), 8):
+        blocco_prodotti = prodotti_da_mostrare[riga_start:riga_start + 8]
+        colonne_griglia = str_lit.columns(8, gap="small")
         for posizione_colonna, (idx, p) in enumerate(blocco_prodotti):
           with colonne_griglia[posizione_colonna]:
             with str_lit.container(border=True):
