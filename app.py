@@ -234,12 +234,14 @@ str_lit.markdown(
     @media (max-width: 1500px) and (min-width: 821px) {
         [data-testid="stHorizontalBlock"]:has(.card-desc) {flex-wrap: wrap !important;}
         [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"] {flex: 0 0 calc(25% - .75rem) !important;}
+        [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"] > div {height: 100% !important;}
         [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {flex-wrap: wrap !important;}
         [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) > [data-testid="stColumn"] {flex: 0 0 calc(25% - .5rem) !important;}
     }
     @media (max-width: 820px) and (min-width: 521px) {
         [data-testid="stHorizontalBlock"]:has(.card-desc), [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {flex-wrap: wrap !important;}
         [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"] {flex: 0 0 calc(33.333% - .7rem) !important;}
+        [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"] > div {height: 100% !important;}
         [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) > [data-testid="stColumn"] {flex: 0 0 calc(33.333% - .45rem) !important;}
     }
     @media (max-width: 520px) {
