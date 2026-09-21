@@ -195,6 +195,18 @@ str_lit.markdown(
         font-size: 1rem;
         margin-bottom: 15px;
     }
+    .dashboard-card-title {
+        min-height: 2.65em;
+        line-height: 1.2;
+        margin: 0 0 12px 0;
+        font-size: 1.35rem;
+        font-weight: 700;
+    }
+    .dashboard-card-desc {
+        min-height: 3.1em;
+        line-height: 1.45;
+        margin-bottom: 15px;
+    }
     /* Layout mirato: agisce solo sulle card Dashboard e Inventario. */
     [data-testid="stMain"] .block-container {
         width: 100% !important;
@@ -2033,9 +2045,9 @@ else:
                 " 15px;'>📦</div>",
                 unsafe_allow_html=True,
             )
-          str_lit.markdown("### Inventario")
+          str_lit.markdown("<div class='dashboard-card-title'>Inventario</div>", unsafe_allow_html=True)
           str_lit.markdown(
-              "<div class='card-desc'>Gestione scorte e codici QR.</div>",
+              "<div class='card-desc dashboard-card-desc'>Gestione scorte e codici QR.</div>",
               unsafe_allow_html=True,
           )
           if str_lit.button(
@@ -2065,9 +2077,9 @@ else:
                 " 15px;'>🍽️</div>",
                 unsafe_allow_html=True,
             )
-          str_lit.markdown("### Calendario Eventi")
+          str_lit.markdown("<div class='dashboard-card-title'>Calendario Eventi</div>", unsafe_allow_html=True)
           str_lit.markdown(
-              "<div class='card-desc'>Calendario e gestione degli eventi Catering.</div>",
+              "<div class='card-desc dashboard-card-desc'>Calendario e gestione degli eventi Catering.</div>",
               unsafe_allow_html=True,
           )
           if str_lit.button(
@@ -2089,9 +2101,9 @@ else:
               " 15px;'>📋</div>",
               unsafe_allow_html=True,
           )
-          str_lit.markdown("### Lista Attrezzature")
+          str_lit.markdown("<div class='dashboard-card-title'>Lista Attrezzature</div>", unsafe_allow_html=True)
           str_lit.markdown(
-              "<div class='card-desc'>Crea e invia liste per eventi.</div>",
+              "<div class='card-desc dashboard-card-desc'>Crea e invia liste per eventi.</div>",
               unsafe_allow_html=True,
           )
           if str_lit.button(
@@ -2107,8 +2119,8 @@ else:
       with c4:
         with str_lit.container(border=True):
           str_lit.markdown("<div style='height: 100px; display: flex; align-items: center; justify-content: center; font-size: 3rem; margin-bottom: 15px;'>📅</div>", unsafe_allow_html=True)
-          str_lit.markdown("### Calendario Noleggi")
-          str_lit.markdown("<div class='card-desc'>Calendario dei noleggi.</div>", unsafe_allow_html=True)
+          str_lit.markdown("<div class='dashboard-card-title'>Calendario Noleggi</div>", unsafe_allow_html=True)
+          str_lit.markdown("<div class='card-desc dashboard-card-desc'>Calendario dei noleggi.</div>", unsafe_allow_html=True)
           if str_lit.button("Apri Calendario Noleggi", use_container_width=True, type="primary", key="btn_h_noleggi_admin_riga"):
             str_lit.session_state.area_selezionata = "opzione_noleggi"
             str_lit.session_state.tipo_calendario = "noleggi"
