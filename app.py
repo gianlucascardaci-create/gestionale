@@ -195,94 +195,26 @@ str_lit.markdown(
         font-size: 1rem;
         margin-bottom: 15px;
     }
-    /* Layout fluido: evita che le colonne progettate su monitor grandi
-       rimangano troppo strette su laptop e tablet. */
+    /* Stabilizzazione: manteniamo il layout nativo delle colonne Streamlit. */
     [data-testid="stMain"] .block-container {
         width: 100% !important;
         max-width: none !important;
         margin: 0 auto !important;
     }
-    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
-        min-width: 0 !important;
-    }
-    [data-testid="stFileUploader"] section {min-width: 0 !important;}
     [data-testid="stMarkdownContainer"] {overflow-wrap: anywhere !important;}
     @media (max-width: 1100px) {
-        [data-testid="stMain"] .block-container {max-width: 100% !important; padding-left: 1.15rem !important; padding-right: 1.15rem !important;}
-        .card-desc {font-size: .9rem; min-height: 38px;}
-        h1 {font-size: 1.8rem !important;}
-        h2 {font-size: 1.3rem !important;}
-        .stButton > button {min-height: 2.65rem !important; white-space: normal !important;}
-        [data-testid="stHorizontalBlock"] {gap: .75rem !important;}
-        [data-testid="stHorizontalBlock"]:has(.card-desc) {display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: .8rem !important;}
-        [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"] {width: auto !important; min-width: 0 !important; flex: none !important;}
-        [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: .55rem !important;}
-        [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) > [data-testid="stColumn"] {width: auto !important; min-width: 0 !important; flex: none !important;}
-        [data-testid="stVerticalBlockBorderWrapper"] {max-width: 100% !important;}
+        [data-testid="stMain"] .block-container {
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+        }
+        .card-desc {font-size: .92rem; min-height: 40px;}
     }
     @media (max-width: 760px) {
-        .block-container {max-width: 100% !important; padding: .7rem .55rem 2rem !important;}
-        .card-desc {font-size: .9rem; min-height: auto; line-height: 1.35;}
-        .stMarkdown h1 {font-size: 1.45rem !important; line-height: 1.15 !important;}
-        .stMarkdown h2 {font-size: 1.25rem !important;}
-        .stMarkdown h3 {font-size: 1.05rem !important;}
-        [data-testid="stHorizontalBlock"] {gap: .55rem !important; align-items: stretch !important;}
-        [data-testid="stHorizontalBlock"]:has(.planner-week) {flex-wrap: nowrap !important;}
-        [data-testid="stHorizontalBlock"]:has(.planner-week) > [data-testid="stColumn"] {flex: 0 0 14.285% !important; min-width: 14.285% !important; width: 14.285% !important;}
-        .stButton > button, .stDownloadButton > button, .stFormSubmitButton > button {font-size: .92rem !important; min-height: 2.8rem !important; padding: .55rem .7rem !important; white-space: normal !important; line-height: 1.15 !important;}
-        [data-testid="stTextInput"] input, [data-testid="stTextArea"] textarea, [data-baseweb="select"] > div {font-size: 1rem !important;}
-        [data-testid="stFileUploader"] {font-size: .9rem !important;}
-        [data-testid="stDataFrame"] {font-size: .86rem !important; overflow-x: auto !important;}
-        .planner-header {padding: 10px 12px !important;}
-        .planner-header h1 {font-size: 1.2rem !important;}
-        .planner-legend {flex-wrap: wrap !important; gap: 8px 12px !important; font-size: .78rem !important;}
-        .planner-week span {font-size: .62rem !important;}
-        [data-testid="stHorizontalBlock"]:has(.planner-day-card) {overflow: visible !important; flex-wrap: wrap !important; padding-bottom: 4px !important;}
-        [data-testid="stHorizontalBlock"]:has(.planner-day-card) > [data-testid="stColumn"] {flex: 0 0 calc(50% - .3rem) !important; min-width: calc(50% - .3rem) !important; width: calc(50% - .3rem) !important;}
-        [data-testid="stHorizontalBlock"]:has(.card-desc) {display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: .6rem !important;}
-        [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"], [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) > [data-testid="stColumn"] {width: auto !important; min-width: 0 !important; flex: none !important;}
-        [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: .6rem !important;}
-        .planner-day-card {min-height: 92px !important; padding: 8px !important;}
-        .planner-day-card .planner-event {font-size: .68rem !important; line-height: 1.2 !important; white-space: normal !important; overflow: hidden !important; max-height: 34px !important;}
-        .planner-static-number {font-size: 1.15rem !important; padding: 7px 3px 12px !important;}
-    }
-    @media (max-width: 420px) {
-        .block-container {padding-left: .4rem !important; padding-right: .4rem !important;}
-        [data-testid="stHorizontalBlock"]:has(.card-desc), [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {grid-template-columns: 1fr !important;}
-        [data-testid="stHorizontalBlock"]:has(.planner-day-card) > [data-testid="stColumn"] {flex: 0 0 100% !important; min-width: 100% !important; width: 100% !important;}
-        .planner-day-card {min-height: 78px !important;}
-        .planner-day-card .planner-event {font-size: .72rem !important; max-height: 36px !important;}
-        .stButton > button, .stDownloadButton > button, .stFormSubmitButton > button {font-size: .9rem !important;}
-    }
-    @media (min-width: 421px) and (max-width: 820px) {
-        [data-testid="stMain"] .block-container {padding-left: .85rem !important; padding-right: .85rem !important;}
-        .stMarkdown h1 {font-size: 1.6rem !important;}
-        .stMarkdown h2 {font-size: 1.3rem !important;}
-        [data-testid="stHorizontalBlock"]:has(.planner-day-card) {flex-wrap: wrap !important; overflow: visible !important;}
-        [data-testid="stHorizontalBlock"]:has(.planner-day-card) > [data-testid="stColumn"] {flex: 0 0 calc(50% - .35rem) !important; min-width: calc(50% - .35rem) !important; width: calc(50% - .35rem) !important;}
-        .planner-day-card {min-height: 105px !important; padding: 9px !important;}
-        .planner-day-card .planner-event {font-size: .72rem !important; line-height: 1.25 !important; max-height: 40px !important;}
-        [data-testid="stHorizontalBlock"]:has(.card-desc) {grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: .7rem !important;}
-        [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: .6rem !important;}
-    }
-    /* Responsive mirato: non tocca barra Esci/Home, moduli o calendario. */
-    @media (min-width: 1201px) and (max-width: 1500px) {
-        [data-testid="stHorizontalBlock"]:has(.card-desc) {display:grid !important; grid-template-columns:repeat(4,minmax(0,1fr)) !important; gap:.85rem !important;}
-        [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {display:grid !important; grid-template-columns:repeat(4,minmax(0,1fr)) !important; gap:.55rem !important;}
-    }
-    @media (min-width: 1501px) {
-        [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {display:grid !important; grid-template-columns:repeat(8,minmax(0,1fr)) !important; gap:.55rem !important;}
-    }
-    @media (min-width: 521px) and (max-width: 1200px) {
-        [data-testid="stHorizontalBlock"]:has(.card-desc) {display:grid !important; grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:.7rem !important;}
-        [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {display:grid !important; grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:.6rem !important;}
-    }
-    @media (min-width: 821px) and (max-width: 1200px) {
-        [data-testid="stHorizontalBlock"]:has(.card-desc) {grid-template-columns:repeat(4,minmax(0,1fr)) !important;}
-        [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {grid-template-columns:repeat(4,minmax(0,1fr)) !important;}
-    }
-    @media (max-width: 520px) {
-        [data-testid="stHorizontalBlock"]:has(.card-desc), [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {display:grid !important; grid-template-columns:1fr !important; gap:.55rem !important;}
+        .block-container {padding: .7rem .55rem 2rem !important;}
+        .stButton > button, .stDownloadButton > button, .stFormSubmitButton > button {
+            white-space: normal !important;
+            line-height: 1.15 !important;
+        }
     }
 </style>
 """,
