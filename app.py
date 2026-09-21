@@ -270,6 +270,32 @@ str_lit.markdown(
         [data-testid="stHorizontalBlock"]:has(.card-desc) {grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: .7rem !important;}
         [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: .6rem !important;}
     }
+    /* Fallback robusto per Streamlit: le colonne hanno spesso larghezze
+       inline e possono ignorare le sole regole grid. */
+    @media (min-width: 821px) and (max-width: 1200px) {
+        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) {
+            display: flex !important; flex-wrap: wrap !important; align-items: stretch !important; gap: .8rem !important;
+        }
+        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) > [data-testid="column"] {
+            flex: 1 1 calc(33.333% - .8rem) !important; width: calc(33.333% - .8rem) !important; max-width: calc(33.333% - .8rem) !important; min-width: 0 !important;
+        }
+    }
+    @media (min-width: 521px) and (max-width: 820px) {
+        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) {
+            display: flex !important; flex-wrap: wrap !important; align-items: stretch !important; gap: .7rem !important;
+        }
+        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) > [data-testid="column"] {
+            flex: 1 1 calc(50% - .7rem) !important; width: calc(50% - .7rem) !important; max-width: calc(50% - .7rem) !important; min-width: 0 !important;
+        }
+    }
+    @media (max-width: 520px) {
+        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) {
+            display: flex !important; flex-direction: column !important; gap: .55rem !important;
+        }
+        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) > [data-testid="column"] {
+            flex: 0 0 100% !important; width: 100% !important; max-width: 100% !important; min-width: 100% !important;
+        }
+    }
 </style>
 """,
     unsafe_allow_html=True,
