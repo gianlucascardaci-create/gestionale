@@ -233,6 +233,8 @@ str_lit.markdown(
     }
     @media (max-width: 1500px) and (min-width: 821px) {
         [data-testid="stHorizontalBlock"]:has(.card-desc) {flex-wrap: wrap !important;}
+        [data-testid="stHorizontalBlock"]:has(.card-desc) h3 {min-height: 2.4em !important; margin-bottom: .35rem !important;}
+        [data-testid="stHorizontalBlock"]:has(.card-desc) .card-desc {height: 45px !important; min-height: 45px !important; overflow: hidden !important;}
         [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"] {flex: 0 0 calc(25% - .75rem) !important;}
         [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"] {min-height: 420px !important;}
         [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"] > div:first-child {height: 420px !important; min-height: 420px !important;}
@@ -244,6 +246,8 @@ str_lit.markdown(
     }
     @media (max-width: 820px) and (min-width: 521px) {
         [data-testid="stHorizontalBlock"]:has(.card-desc), [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {flex-wrap: wrap !important;}
+        [data-testid="stHorizontalBlock"]:has(.card-desc) h3 {min-height: 2.4em !important; margin-bottom: .35rem !important;}
+        [data-testid="stHorizontalBlock"]:has(.card-desc) .card-desc {height: 45px !important; min-height: 45px !important; overflow: hidden !important;}
         [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"] {flex: 0 0 calc(33.333% - .7rem) !important;}
         [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"] {min-height: 420px !important;}
         [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"] > div:first-child {height: 420px !important; min-height: 420px !important;}
