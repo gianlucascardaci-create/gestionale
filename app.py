@@ -202,7 +202,7 @@ str_lit.markdown(
         max-width: 1500px !important;
         margin: 0 auto !important;
     }
-    [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
         min-width: 0 !important;
     }
     [data-testid="stFileUploader"] section {min-width: 0 !important;}
@@ -215,11 +215,11 @@ str_lit.markdown(
         .stButton > button {min-height: 2.65rem !important; white-space: normal !important;}
         [data-testid="stHorizontalBlock"] {gap: .75rem !important;}
         [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) {flex-wrap: wrap !important;}
-        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) > [data-testid="column"] {flex: 1 1 calc(50% - .4rem) !important; min-width: calc(50% - .4rem) !important;}
+        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) > [data-testid="stColumn"] {flex: 1 1 calc(50% - .4rem) !important; min-width: calc(50% - .4rem) !important;}
         [data-testid="stHorizontalBlock"]:has(.card-desc) {display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: .8rem !important;}
-        [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="column"] {width: auto !important; min-width: 0 !important; flex: none !important;}
+        [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"] {width: auto !important; min-width: 0 !important; flex: none !important;}
         [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: .55rem !important;}
-        [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) > [data-testid="column"] {width: auto !important; min-width: 0 !important; flex: none !important;}
+        [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) > [data-testid="stColumn"] {width: auto !important; min-width: 0 !important; flex: none !important;}
         [data-testid="stVerticalBlockBorderWrapper"] {max-width: 100% !important;}
     }
     @media (max-width: 760px) {
@@ -230,9 +230,9 @@ str_lit.markdown(
         .stMarkdown h3 {font-size: 1.05rem !important;}
         [data-testid="stHorizontalBlock"] {gap: .55rem !important; align-items: stretch !important;}
         [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)) {flex-wrap: wrap !important;}
-        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)) > [data-testid="column"] {flex: 1 1 100% !important; min-width: 100% !important; width: 100% !important;}
+        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)) > [data-testid="stColumn"] {flex: 1 1 100% !important; min-width: 100% !important; width: 100% !important;}
         [data-testid="stHorizontalBlock"]:has(.planner-week) {flex-wrap: nowrap !important;}
-        [data-testid="stHorizontalBlock"]:has(.planner-week) > [data-testid="column"] {flex: 0 0 14.285% !important; min-width: 14.285% !important; width: 14.285% !important;}
+        [data-testid="stHorizontalBlock"]:has(.planner-week) > [data-testid="stColumn"] {flex: 0 0 14.285% !important; min-width: 14.285% !important; width: 14.285% !important;}
         .stButton > button, .stDownloadButton > button, .stFormSubmitButton > button {font-size: .92rem !important; min-height: 2.8rem !important; padding: .55rem .7rem !important; white-space: normal !important; line-height: 1.15 !important;}
         [data-testid="stTextInput"] input, [data-testid="stTextArea"] textarea, [data-baseweb="select"] > div {font-size: 1rem !important;}
         [data-testid="stFileUploader"] {font-size: .9rem !important;}
@@ -242,9 +242,9 @@ str_lit.markdown(
         .planner-legend {flex-wrap: wrap !important; gap: 8px 12px !important; font-size: .78rem !important;}
         .planner-week span {font-size: .62rem !important;}
         [data-testid="stHorizontalBlock"]:has(.planner-day-card) {overflow: visible !important; flex-wrap: wrap !important; padding-bottom: 4px !important;}
-        [data-testid="stHorizontalBlock"]:has(.planner-day-card) > [data-testid="column"] {flex: 0 0 calc(50% - .3rem) !important; min-width: calc(50% - .3rem) !important; width: calc(50% - .3rem) !important;}
+        [data-testid="stHorizontalBlock"]:has(.planner-day-card) > [data-testid="stColumn"] {flex: 0 0 calc(50% - .3rem) !important; min-width: calc(50% - .3rem) !important; width: calc(50% - .3rem) !important;}
         [data-testid="stHorizontalBlock"]:has(.card-desc) {display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: .6rem !important;}
-        [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="column"], [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) > [data-testid="column"] {width: auto !important; min-width: 0 !important; flex: none !important;}
+        [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"], [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) > [data-testid="stColumn"] {width: auto !important; min-width: 0 !important; flex: none !important;}
         [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: .6rem !important;}
         .planner-day-card {min-height: 92px !important; padding: 8px !important;}
         .planner-day-card .planner-event {font-size: .68rem !important; line-height: 1.2 !important; white-space: normal !important; overflow: hidden !important; max-height: 34px !important;}
@@ -253,7 +253,7 @@ str_lit.markdown(
     @media (max-width: 420px) {
         .block-container {padding-left: .4rem !important; padding-right: .4rem !important;}
         [data-testid="stHorizontalBlock"]:has(.card-desc), [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {grid-template-columns: 1fr !important;}
-        [data-testid="stHorizontalBlock"]:has(.planner-day-card) > [data-testid="column"] {flex: 0 0 100% !important; min-width: 100% !important; width: 100% !important;}
+        [data-testid="stHorizontalBlock"]:has(.planner-day-card) > [data-testid="stColumn"] {flex: 0 0 100% !important; min-width: 100% !important; width: 100% !important;}
         .planner-day-card {min-height: 78px !important;}
         .planner-day-card .planner-event {font-size: .72rem !important; max-height: 36px !important;}
         .stButton > button, .stDownloadButton > button, .stFormSubmitButton > button {font-size: .9rem !important;}
@@ -263,10 +263,10 @@ str_lit.markdown(
         .stMarkdown h1 {font-size: 1.6rem !important;}
         .stMarkdown h2 {font-size: 1.3rem !important;}
         [data-testid="stHorizontalBlock"]:has(.planner-day-card) {flex-wrap: wrap !important; overflow: visible !important;}
-        [data-testid="stHorizontalBlock"]:has(.planner-day-card) > [data-testid="column"] {flex: 0 0 calc(50% - .35rem) !important; min-width: calc(50% - .35rem) !important; width: calc(50% - .35rem) !important;}
+        [data-testid="stHorizontalBlock"]:has(.planner-day-card) > [data-testid="stColumn"] {flex: 0 0 calc(50% - .35rem) !important; min-width: calc(50% - .35rem) !important; width: calc(50% - .35rem) !important;}
         .planner-day-card {min-height: 105px !important; padding: 9px !important;}
         .planner-day-card .planner-event {font-size: .72rem !important; line-height: 1.25 !important; max-height: 40px !important;}
-        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) > [data-testid="column"] {flex: 1 1 100% !important; min-width: 100% !important;}
+        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) > [data-testid="stColumn"] {flex: 1 1 100% !important; min-width: 100% !important;}
         [data-testid="stHorizontalBlock"]:has(.card-desc) {grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: .7rem !important;}
         [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: .6rem !important;}
     }
@@ -276,7 +276,7 @@ str_lit.markdown(
         [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) {
             display: flex !important; flex-wrap: wrap !important; align-items: stretch !important; gap: .8rem !important;
         }
-        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) > [data-testid="column"] {
+        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) > [data-testid="stColumn"] {
             flex: 1 1 calc(33.333% - .8rem) !important; width: calc(33.333% - .8rem) !important; max-width: calc(33.333% - .8rem) !important; min-width: 0 !important;
         }
     }
@@ -284,7 +284,7 @@ str_lit.markdown(
         [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) {
             display: flex !important; flex-wrap: wrap !important; align-items: stretch !important; gap: .7rem !important;
         }
-        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) > [data-testid="column"] {
+        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) > [data-testid="stColumn"] {
             flex: 1 1 calc(50% - .7rem) !important; width: calc(50% - .7rem) !important; max-width: calc(50% - .7rem) !important; min-width: 0 !important;
         }
     }
@@ -292,7 +292,7 @@ str_lit.markdown(
         [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) {
             display: flex !important; flex-direction: column !important; gap: .55rem !important;
         }
-        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) > [data-testid="column"] {
+        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) > [data-testid="stColumn"] {
             flex: 0 0 100% !important; width: 100% !important; max-width: 100% !important; min-width: 100% !important;
         }
     }
@@ -301,7 +301,7 @@ str_lit.markdown(
         [data-testid="stHorizontalBlock"] {
             display: flex !important; flex-wrap: wrap !important; align-items: stretch !important; gap: .85rem !important;
         }
-        [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+        [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
             flex: 1 1 calc(25% - .85rem) !important; width: calc(25% - .85rem) !important; max-width: calc(25% - .85rem) !important; min-width: 0 !important;
         }
     }
@@ -309,7 +309,7 @@ str_lit.markdown(
         [data-testid="stHorizontalBlock"] {
             display: flex !important; flex-wrap: wrap !important; align-items: stretch !important; gap: .8rem !important;
         }
-        [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+        [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
             flex: 1 1 calc(33.333% - .8rem) !important; width: calc(33.333% - .8rem) !important; max-width: calc(33.333% - .8rem) !important; min-width: 0 !important;
         }
     }
@@ -317,7 +317,7 @@ str_lit.markdown(
         [data-testid="stHorizontalBlock"] {
             display: flex !important; flex-wrap: wrap !important; align-items: stretch !important; gap: .7rem !important;
         }
-        [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+        [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
             flex: 1 1 calc(50% - .7rem) !important; width: calc(50% - .7rem) !important; max-width: calc(50% - .7rem) !important; min-width: 0 !important;
         }
     }
@@ -325,7 +325,7 @@ str_lit.markdown(
         [data-testid="stHorizontalBlock"] {
             display: flex !important; flex-wrap: wrap !important; align-items: stretch !important; gap: .55rem !important;
         }
-        [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+        [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
             flex: 0 0 100% !important; width: 100% !important; max-width: 100% !important; min-width: 100% !important;
         }
     }
