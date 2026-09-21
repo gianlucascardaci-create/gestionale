@@ -195,13 +195,27 @@ str_lit.markdown(
         font-size: 1rem;
         margin-bottom: 15px;
     }
+    /* Layout fluido: evita che le colonne progettate su monitor grandi
+       rimangano troppo strette su laptop e tablet. */
+    .main .block-container {
+        width: 100% !important;
+        max-width: 1500px !important;
+        margin: 0 auto !important;
+    }
+    [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+        min-width: 0 !important;
+    }
+    [data-testid="stFileUploader"] section {min-width: 0 !important;}
+    [data-testid="stMarkdownContainer"] {overflow-wrap: anywhere !important;}
     @media (max-width: 1100px) {
-        .block-container {max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important;}
+        .main .block-container {max-width: 100% !important; padding-left: 1.15rem !important; padding-right: 1.15rem !important;}
         .card-desc {font-size: .9rem; min-height: 38px;}
         h1 {font-size: 1.8rem !important;}
         h2 {font-size: 1.3rem !important;}
         .stButton > button {min-height: 2.65rem !important; white-space: normal !important;}
         [data-testid="stHorizontalBlock"] {gap: .75rem !important;}
+        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) {flex-wrap: wrap !important;}
+        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) > [data-testid="column"] {flex: 1 1 calc(50% - .4rem) !important; min-width: calc(50% - .4rem) !important;}
     }
     @media (max-width: 760px) {
         .block-container {max-width: 100% !important; padding: .7rem .55rem 2rem !important;}
@@ -234,6 +248,16 @@ str_lit.markdown(
         .planner-day-card {min-height: 78px !important;}
         .planner-day-card .planner-event {font-size: .72rem !important; max-height: 36px !important;}
         .stButton > button, .stDownloadButton > button, .stFormSubmitButton > button {font-size: .9rem !important;}
+    }
+    @media (min-width: 421px) and (max-width: 820px) {
+        .main .block-container {padding-left: .85rem !important; padding-right: .85rem !important;}
+        .stMarkdown h1 {font-size: 1.6rem !important;}
+        .stMarkdown h2 {font-size: 1.3rem !important;}
+        [data-testid="stHorizontalBlock"]:has(.planner-day-card) {flex-wrap: wrap !important; overflow: visible !important;}
+        [data-testid="stHorizontalBlock"]:has(.planner-day-card) > [data-testid="column"] {flex: 0 0 calc(50% - .35rem) !important; min-width: calc(50% - .35rem) !important; width: calc(50% - .35rem) !important;}
+        .planner-day-card {min-height: 105px !important; padding: 9px !important;}
+        .planner-day-card .planner-event {font-size: .72rem !important; line-height: 1.25 !important; max-height: 40px !important;}
+        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) > [data-testid="column"] {flex: 1 1 100% !important; min-width: 100% !important;}
     }
 </style>
 """,
