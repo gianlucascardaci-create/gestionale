@@ -2061,7 +2061,7 @@ else:
     )
 
     if is_admin:
-      c1, c2, c3, c4, c5 = str_lit.columns(5)
+      c1, c2, c3 = str_lit.columns(3, gap="medium")
       with c1:
         with str_lit.container(border=True):
           if logo_noleggio_b64:
@@ -2151,6 +2151,7 @@ else:
             str_lit.rerun()
             str_lit.stop()
 
+      c4, c5 = str_lit.columns(2, gap="medium")
       with c4:
         with str_lit.container(border=True):
           str_lit.markdown("<div style='height: 100px; display: flex; align-items: center; justify-content: center; font-size: 3rem; margin-bottom: 15px;'>📅</div>", unsafe_allow_html=True)
@@ -2349,10 +2350,11 @@ else:
       </style>
       """, unsafe_allow_html=True)
 
-      # Griglia compatta: otto schede per riga su desktop.
-      for riga_start in range(0, len(prodotti_da_mostrare), 8):
-        blocco_prodotti = prodotti_da_mostrare[riga_start:riga_start + 8]
-        colonne_griglia = str_lit.columns(8, gap="small")
+      # Griglia leggibile: quattro schede per riga, senza dipendere dal CSS
+      # del browser. Su laptop, iPad e telefono le schede restano allineate.
+      for riga_start in range(0, len(prodotti_da_mostrare), 4):
+        blocco_prodotti = prodotti_da_mostrare[riga_start:riga_start + 4]
+        colonne_griglia = str_lit.columns(4, gap="medium")
         for posizione_colonna, (idx, p) in enumerate(blocco_prodotti):
           with colonne_griglia[posizione_colonna]:
             with str_lit.container(border=True):
