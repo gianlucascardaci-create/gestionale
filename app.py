@@ -268,7 +268,7 @@ str_lit.markdown(
         .planner-day-card .planner-event {font-size: .72rem !important; line-height: 1.25 !important; max-height: 40px !important;}
         [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) > [data-testid="stColumn"] {flex: 1 1 100% !important; min-width: 100% !important;}
         [data-testid="stHorizontalBlock"]:has(.card-desc) {grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: .7rem !important;}
-        [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: .6rem !important;}
+        [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: .6rem !important;}
     }
     /* Fallback robusto per Streamlit: le colonne hanno spesso larghezze
        inline e possono ignorare le sole regole grid. */
@@ -277,7 +277,7 @@ str_lit.markdown(
             display: flex !important; flex-wrap: wrap !important; align-items: stretch !important; gap: .8rem !important;
         }
         [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) > [data-testid="stColumn"] {
-            flex: 1 1 calc(33.333% - .8rem) !important; width: calc(33.333% - .8rem) !important; max-width: calc(33.333% - .8rem) !important; min-width: 0 !important;
+            flex: 1 1 calc(25% - .8rem) !important; width: calc(25% - .8rem) !important; max-width: calc(25% - .8rem) !important; min-width: 0 !important;
         }
     }
     @media (min-width: 521px) and (max-width: 820px) {
@@ -305,12 +305,16 @@ str_lit.markdown(
             flex: 1 1 calc(25% - .85rem) !important; width: calc(25% - .85rem) !important; max-width: calc(25% - .85rem) !important; min-width: 0 !important;
         }
     }
+    @media (min-width: 1501px) {
+        [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {display: grid !important; grid-template-columns: repeat(8, minmax(0, 1fr)) !important; gap: .55rem !important;}
+        [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) > [data-testid="stColumn"] {width: auto !important; max-width: none !important; min-width: 0 !important; flex: none !important;}
+    }
     @media (min-width: 821px) and (max-width: 1200px) {
         [data-testid="stHorizontalBlock"] {
             display: flex !important; flex-wrap: wrap !important; align-items: stretch !important; gap: .8rem !important;
         }
         [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
-            flex: 1 1 calc(33.333% - .8rem) !important; width: calc(33.333% - .8rem) !important; max-width: calc(33.333% - .8rem) !important; min-width: 0 !important;
+            flex: 1 1 calc(25% - .8rem) !important; width: calc(25% - .8rem) !important; max-width: calc(25% - .8rem) !important; min-width: 0 !important;
         }
     }
     @media (min-width: 521px) and (max-width: 820px) {
@@ -318,7 +322,7 @@ str_lit.markdown(
             display: flex !important; flex-wrap: wrap !important; align-items: stretch !important; gap: .7rem !important;
         }
         [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
-            flex: 1 1 calc(50% - .7rem) !important; width: calc(50% - .7rem) !important; max-width: calc(50% - .7rem) !important; min-width: 0 !important;
+            flex: 1 1 calc(33.333% - .7rem) !important; width: calc(33.333% - .7rem) !important; max-width: calc(33.333% - .7rem) !important; min-width: 0 !important;
         }
     }
     @media (max-width: 520px) {
@@ -2061,7 +2065,7 @@ else:
     )
 
     if is_admin:
-      c1, c2, c3 = str_lit.columns(3, gap="medium")
+      c1, c2, c3, c4, c5 = str_lit.columns(5, gap="medium")
       with c1:
         with str_lit.container(border=True):
           if logo_noleggio_b64:
@@ -2151,7 +2155,6 @@ else:
             str_lit.rerun()
             str_lit.stop()
 
-      c4, c5 = str_lit.columns(2, gap="medium")
       with c4:
         with str_lit.container(border=True):
           str_lit.markdown("<div style='height: 100px; display: flex; align-items: center; justify-content: center; font-size: 3rem; margin-bottom: 15px;'>📅</div>", unsafe_allow_html=True)
@@ -2350,11 +2353,11 @@ else:
       </style>
       """, unsafe_allow_html=True)
 
-      # Griglia leggibile: quattro schede per riga, senza dipendere dal CSS
-      # del browser. Su laptop, iPad e telefono le schede restano allineate.
-      for riga_start in range(0, len(prodotti_da_mostrare), 4):
-        blocco_prodotti = prodotti_da_mostrare[riga_start:riga_start + 4]
-        colonne_griglia = str_lit.columns(4, gap="medium")
+      # Ventiquattro slot per blocco: il CSS responsive li dispone in 8
+      # colonne sui monitor grandi, 4 sui laptop e 3 su iPad.
+      for riga_start in range(0, len(prodotti_da_mostrare), 24):
+        blocco_prodotti = prodotti_da_mostrare[riga_start:riga_start + 24]
+        colonne_griglia = str_lit.columns(24, gap="medium")
         for posizione_colonna, (idx, p) in enumerate(blocco_prodotti):
           with colonne_griglia[posizione_colonna]:
             with str_lit.container(border=True):
