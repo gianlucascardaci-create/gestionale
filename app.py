@@ -296,6 +296,39 @@ str_lit.markdown(
             flex: 0 0 100% !important; width: 100% !important; max-width: 100% !important; min-width: 100% !important;
         }
     }
+    /* Compatibilità Safari/iPad meno recenti: fallback senza :has(). */
+    @media (min-width: 1201px) and (max-width: 1500px) {
+        [data-testid="stHorizontalBlock"] {
+            display: flex !important; flex-wrap: wrap !important; align-items: stretch !important; gap: .85rem !important;
+        }
+        [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+            flex: 1 1 calc(25% - .85rem) !important; width: calc(25% - .85rem) !important; max-width: calc(25% - .85rem) !important; min-width: 0 !important;
+        }
+    }
+    @media (min-width: 821px) and (max-width: 1200px) {
+        [data-testid="stHorizontalBlock"] {
+            display: flex !important; flex-wrap: wrap !important; align-items: stretch !important; gap: .8rem !important;
+        }
+        [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+            flex: 1 1 calc(33.333% - .8rem) !important; width: calc(33.333% - .8rem) !important; max-width: calc(33.333% - .8rem) !important; min-width: 0 !important;
+        }
+    }
+    @media (min-width: 521px) and (max-width: 820px) {
+        [data-testid="stHorizontalBlock"] {
+            display: flex !important; flex-wrap: wrap !important; align-items: stretch !important; gap: .7rem !important;
+        }
+        [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+            flex: 1 1 calc(50% - .7rem) !important; width: calc(50% - .7rem) !important; max-width: calc(50% - .7rem) !important; min-width: 0 !important;
+        }
+    }
+    @media (max-width: 520px) {
+        [data-testid="stHorizontalBlock"] {
+            display: flex !important; flex-wrap: wrap !important; align-items: stretch !important; gap: .55rem !important;
+        }
+        [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+            flex: 0 0 100% !important; width: 100% !important; max-width: 100% !important; min-width: 100% !important;
+        }
+    }
 </style>
 """,
     unsafe_allow_html=True,
