@@ -199,7 +199,7 @@ str_lit.markdown(
        rimangano troppo strette su laptop e tablet. */
     [data-testid="stMain"] .block-container {
         width: 100% !important;
-        max-width: 1500px !important;
+        max-width: none !important;
         margin: 0 auto !important;
     }
     [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
@@ -214,8 +214,6 @@ str_lit.markdown(
         h2 {font-size: 1.3rem !important;}
         .stButton > button {min-height: 2.65rem !important; white-space: normal !important;}
         [data-testid="stHorizontalBlock"] {gap: .75rem !important;}
-        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) {flex-wrap: wrap !important;}
-        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) > [data-testid="stColumn"] {flex: 1 1 calc(50% - .4rem) !important; min-width: calc(50% - .4rem) !important;}
         [data-testid="stHorizontalBlock"]:has(.card-desc) {display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: .8rem !important;}
         [data-testid="stHorizontalBlock"]:has(.card-desc) > [data-testid="stColumn"] {width: auto !important; min-width: 0 !important; flex: none !important;}
         [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: .55rem !important;}
@@ -229,8 +227,6 @@ str_lit.markdown(
         .stMarkdown h2 {font-size: 1.25rem !important;}
         .stMarkdown h3 {font-size: 1.05rem !important;}
         [data-testid="stHorizontalBlock"] {gap: .55rem !important; align-items: stretch !important;}
-        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)) {flex-wrap: wrap !important;}
-        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)) > [data-testid="stColumn"] {flex: 1 1 100% !important; min-width: 100% !important; width: 100% !important;}
         [data-testid="stHorizontalBlock"]:has(.planner-week) {flex-wrap: nowrap !important;}
         [data-testid="stHorizontalBlock"]:has(.planner-week) > [data-testid="stColumn"] {flex: 0 0 14.285% !important; min-width: 14.285% !important; width: 14.285% !important;}
         .stButton > button, .stDownloadButton > button, .stFormSubmitButton > button {font-size: .92rem !important; min-height: 2.8rem !important; padding: .55rem .7rem !important; white-space: normal !important; line-height: 1.15 !important;}
@@ -266,72 +262,27 @@ str_lit.markdown(
         [data-testid="stHorizontalBlock"]:has(.planner-day-card) > [data-testid="stColumn"] {flex: 0 0 calc(50% - .35rem) !important; min-width: calc(50% - .35rem) !important; width: calc(50% - .35rem) !important;}
         .planner-day-card {min-height: 105px !important; padding: 9px !important;}
         .planner-day-card .planner-event {font-size: .72rem !important; line-height: 1.25 !important; max-height: 40px !important;}
-        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) > [data-testid="stColumn"] {flex: 1 1 100% !important; min-width: 100% !important;}
         [data-testid="stHorizontalBlock"]:has(.card-desc) {grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: .7rem !important;}
         [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: .6rem !important;}
     }
-    /* Fallback robusto per Streamlit: le colonne hanno spesso larghezze
-       inline e possono ignorare le sole regole grid. */
-    @media (min-width: 821px) and (max-width: 1200px) {
-        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) {
-            display: flex !important; flex-wrap: wrap !important; align-items: stretch !important; gap: .8rem !important;
-        }
-        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) > [data-testid="stColumn"] {
-            flex: 1 1 calc(25% - .8rem) !important; width: calc(25% - .8rem) !important; max-width: calc(25% - .8rem) !important; min-width: 0 !important;
-        }
-    }
-    @media (min-width: 521px) and (max-width: 820px) {
-        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) {
-            display: flex !important; flex-wrap: wrap !important; align-items: stretch !important; gap: .7rem !important;
-        }
-        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) > [data-testid="stColumn"] {
-            flex: 1 1 calc(50% - .7rem) !important; width: calc(50% - .7rem) !important; max-width: calc(50% - .7rem) !important; min-width: 0 !important;
-        }
-    }
-    @media (max-width: 520px) {
-        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) {
-            display: flex !important; flex-direction: column !important; gap: .55rem !important;
-        }
-        [data-testid="stHorizontalBlock"]:not(:has(.planner-day-card)):not(:has(.planner-week)) > [data-testid="stColumn"] {
-            flex: 0 0 100% !important; width: 100% !important; max-width: 100% !important; min-width: 100% !important;
-        }
-    }
-    /* Compatibilità Safari/iPad meno recenti: fallback senza :has(). */
+    /* Responsive mirato: non tocca barra Esci/Home, moduli o calendario. */
     @media (min-width: 1201px) and (max-width: 1500px) {
-        [data-testid="stHorizontalBlock"] {
-            display: flex !important; flex-wrap: wrap !important; align-items: stretch !important; gap: .85rem !important;
-        }
-        [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
-            flex: 1 1 calc(25% - .85rem) !important; width: calc(25% - .85rem) !important; max-width: calc(25% - .85rem) !important; min-width: 0 !important;
-        }
+        [data-testid="stHorizontalBlock"]:has(.card-desc) {display:grid !important; grid-template-columns:repeat(4,minmax(0,1fr)) !important; gap:.85rem !important;}
+        [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {display:grid !important; grid-template-columns:repeat(4,minmax(0,1fr)) !important; gap:.55rem !important;}
     }
     @media (min-width: 1501px) {
-        [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {display: grid !important; grid-template-columns: repeat(8, minmax(0, 1fr)) !important; gap: .55rem !important;}
-        [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) > [data-testid="stColumn"] {width: auto !important; max-width: none !important; min-width: 0 !important; flex: none !important;}
+        [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {display:grid !important; grid-template-columns:repeat(8,minmax(0,1fr)) !important; gap:.55rem !important;}
+    }
+    @media (min-width: 521px) and (max-width: 1200px) {
+        [data-testid="stHorizontalBlock"]:has(.card-desc) {display:grid !important; grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:.7rem !important;}
+        [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {display:grid !important; grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:.6rem !important;}
     }
     @media (min-width: 821px) and (max-width: 1200px) {
-        [data-testid="stHorizontalBlock"] {
-            display: flex !important; flex-wrap: wrap !important; align-items: stretch !important; gap: .8rem !important;
-        }
-        [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
-            flex: 1 1 calc(25% - .8rem) !important; width: calc(25% - .8rem) !important; max-width: calc(25% - .8rem) !important; min-width: 0 !important;
-        }
-    }
-    @media (min-width: 521px) and (max-width: 820px) {
-        [data-testid="stHorizontalBlock"] {
-            display: flex !important; flex-wrap: wrap !important; align-items: stretch !important; gap: .7rem !important;
-        }
-        [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
-            flex: 1 1 calc(33.333% - .7rem) !important; width: calc(33.333% - .7rem) !important; max-width: calc(33.333% - .7rem) !important; min-width: 0 !important;
-        }
+        [data-testid="stHorizontalBlock"]:has(.card-desc) {grid-template-columns:repeat(4,minmax(0,1fr)) !important;}
+        [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {grid-template-columns:repeat(4,minmax(0,1fr)) !important;}
     }
     @media (max-width: 520px) {
-        [data-testid="stHorizontalBlock"] {
-            display: flex !important; flex-wrap: wrap !important; align-items: stretch !important; gap: .55rem !important;
-        }
-        [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
-            flex: 0 0 100% !important; width: 100% !important; max-width: 100% !important; min-width: 100% !important;
-        }
+        [data-testid="stHorizontalBlock"]:has(.card-desc), [data-testid="stHorizontalBlock"]:has(.prodotto-griglia-titolo) {display:grid !important; grid-template-columns:1fr !important; gap:.55rem !important;}
     }
 </style>
 """,
