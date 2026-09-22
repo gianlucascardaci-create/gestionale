@@ -25,6 +25,7 @@ try:
   from reportlab.lib.pagesizes import letter
   from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
   from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle, Image as ReportLabImage
+  from reportlab.pdfgen import canvas as ReportLabCanvas
   REPORTLAB_DISPONIBILE = True
 except ImportError:
   REPORTLAB_DISPONIBILE = False
@@ -471,7 +472,7 @@ def carica_dati_esterni():
     # ma non vengono caricati nella pagina del magazzino.
     try:
       res_prod = supabase.table("prodotti_noleggio").select(
-          "id,codice,nome,categoria,quantita,posizione,costo_noleggio,note,foto_path,scheda_tecnica"
+          "id,codice,nome,categoria,quantita,posizione,costo_noleggio,note,foto_path,scheda_tecnica,scheda_materiale,scheda_colore,scheda_dimensione,scheda_note"
       ).order("nome").execute()
     except Exception:
       # Compatibilità temporanea con Supabase prima dell'esecuzione della migrazione SQL.
@@ -479,6 +480,16 @@ def carica_dati_esterni():
           "id,codice,nome,categoria,quantita,posizione,costo_noleggio,note,foto_path"
       ).order("nome").execute()
     prodotti = res_prod.data or []
+    for prodotto in prodotti:
+      scheda_precedente = dati_scheda_tecnica(prodotto.get("scheda_tecnica"))
+      campi_db = {
+          "materiale": prodotto.get("scheda_materiale"),
+          "colore": prodotto.get("scheda_colore"),
+          "dimensione": prodotto.get("scheda_dimensione"),
+          "note": prodotto.get("scheda_note"),
+      }
+      scheda = campi_db if any(valore not in (None, "") for valore in campi_db.values()) else scheda_precedente
+      prodotto["scheda_tecnica"] = json.dumps(scheda, ensure_ascii=False)
     try:
       res_nol = supabase.table("noleggi").select("*").order("inizio").execute()
       noleggi = [normalizza_noleggio_db(r) for r in (res_nol.data or [])]
@@ -530,9 +541,16 @@ def salva_dati_esterni():
     # Gli aggiornamenti usano l'id del database. Non vengono eseguite
     # SELECT aggiuntive per ogni prodotto.
     for p in str_lit.session_state.prodotti_noleggio:
+      scheda = dati_scheda_tecnica(p.get("scheda_tecnica"))
       payload = {k: p.get(k) for k in (
           "codice", "nome", "categoria", "quantita", "posizione",
           "costo_noleggio", "note", "foto_path", "scheda_tecnica")}
+      payload.update({
+          "scheda_materiale": scheda["materiale"],
+          "scheda_colore": scheda["colore"],
+          "scheda_dimensione": scheda["dimensione"],
+          "scheda_note": scheda["note"],
+      })
       payload = {k: v for k, v in payload.items() if v is not None}
       if p.get("id"):
         res = supabase.table("prodotti_noleggio").update(payload).eq("id", p["id"]).execute()
@@ -913,51 +931,83 @@ def genera_pdf_lista_attrezzature(nome_evento, lista_prodotti):
 
 
 def genera_pdf_scheda_prodotto(prodotto):
-  """Genera un PDF tecnico contenente solo nome prodotto e scheda tecnica."""
+  """Genera una scheda tecnica quadrata 800x800 pt, pronta per un sito commerciale."""
   buffer = BytesIO()
-  doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
-  styles = getSampleStyleSheet()
-  titolo = ParagraphStyle("SchedaTitolo", parent=styles["Title"], fontSize=21, leading=25, textColor=colors.HexColor("#0056b3"), alignment=1, spaceAfter=18)
-  nome_style = ParagraphStyle("SchedaNome", parent=styles["Heading1"], fontSize=17, leading=21, textColor=colors.HexColor("#123a63"), alignment=1, spaceAfter=0)
-  sezione = ParagraphStyle("SchedaSezione", parent=styles["Heading2"], fontSize=13, leading=16, textColor=colors.HexColor("#0056b3"), spaceBefore=18, spaceAfter=8)
-  testo = ParagraphStyle("SchedaTesto", parent=styles["BodyText"], fontSize=11, leading=17, textColor=colors.HexColor("#263238"), alignment=0)
-  nome = str(prodotto.get("nome", "Prodotto")).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-  story = [Paragraph("SCHEDA TECNICA", titolo)]
-  nome_box = Table([[Paragraph(nome, nome_style)]], colWidths=[500])
-  nome_box.setStyle(TableStyle([
-      ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#eaf3ff")),
-      ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#0056b3")),
-      ("TOPPADDING", (0, 0), (-1, -1), 16),
-      ("BOTTOMPADDING", (0, 0), (-1, -1), 16),
-      ("LEFTPADDING", (0, 0), (-1, -1), 12),
-      ("RIGHTPADDING", (0, 0), (-1, -1), 12),
-  ]))
-  story.append(nome_box)
-  story.append(Paragraph("Caratteristiche tecniche", sezione))
+  pagina = 800
+  pdf = ReportLabCanvas(buffer, pagesize=(pagina, pagina))
+  blu = colors.HexColor("#0759b8")
+  blu_scuro = colors.HexColor("#123765")
+  azzurro = colors.HexColor("#eaf3ff")
+  testo_scuro = colors.HexColor("#26384d")
+  grigio = colors.HexColor("#6b7b8f")
+
+  pdf.setFillColor(colors.HexColor("#f7fbff"))
+  pdf.rect(0, 0, pagina, pagina, fill=1, stroke=0)
+  pdf.setFillColor(blu)
+  pdf.roundRect(28, 28, pagina - 56, pagina - 56, 22, fill=0, stroke=1)
+  pdf.setFillColor(blu)
+  pdf.roundRect(28, pagina - 184, pagina - 56, 156, 22, fill=1, stroke=0)
+  pdf.setFillColor(colors.white)
+  pdf.setFont("Helvetica-Bold", 15)
+  pdf.drawString(62, pagina - 70, "SCHEDA TECNICA")
+  pdf.setFont("Helvetica", 9)
+  pdf.drawRightString(pagina - 62, pagina - 70, "ERGO & SCARDACI")
+
+  nome = str(prodotto.get("nome", "Prodotto"))
+  pdf.setFont("Helvetica-Bold", 31 if len(nome) < 28 else 25)
+  pdf.drawString(62, pagina - 130, nome[:48])
+  pdf.setFillColor(blu_scuro)
+  pdf.setFont("Helvetica-Bold", 11)
+  pdf.drawString(62, pagina - 224, "CARATTERISTICHE DEL PRODOTTO")
+  pdf.setStrokeColor(colors.HexColor("#b9d2ee"))
+  pdf.setLineWidth(1)
+  pdf.line(62, pagina - 238, pagina - 62, pagina - 238)
+
   scheda = dati_scheda_tecnica(prodotto.get("scheda_tecnica"))
-  righe_tecniche = []
-  for etichetta, chiave in (("Materiale", "materiale"), ("Colore", "colore"), ("Dimensione", "dimensione"), ("Note", "note")):
-    valore = scheda.get(chiave, "").strip()
-    if valore:
-      valore_html = valore.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
-      righe_tecniche.append([Paragraph(f"<b>{etichetta}</b>", testo), Paragraph(valore_html, testo)])
-  if not righe_tecniche:
-    righe_tecniche.append([Paragraph("<b>Scheda tecnica</b>", testo), Paragraph("Nessuna informazione inserita.", testo)])
-  testo_box = Table(righe_tecniche, colWidths=[125, 375])
-  testo_box.setStyle(TableStyle([
-      ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#eaf3ff")),
-      ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#0056b3")),
-      ("BACKGROUND", (1, 0), (1, -1), colors.HexColor("#f7fbff")),
-      ("BOX", (0, 0), (-1, -1), .7, colors.HexColor("#b8c7dc")),
-      ("INNERGRID", (0, 0), (-1, -1), .4, colors.HexColor("#d5e0ed")),
-      ("VALIGN", (0, 0), (-1, -1), "TOP"),
-      ("TOPPADDING", (0, 0), (-1, -1), 16),
-      ("BOTTOMPADDING", (0, 0), (-1, -1), 16),
-      ("LEFTPADDING", (0, 0), (-1, -1), 16),
-      ("RIGHTPADDING", (0, 0), (-1, -1), 16),
-  ]))
-  story.append(testo_box)
-  doc.build(story)
+  campi = [("MATERIALE", scheda.get("materiale", "")), ("COLORE", scheda.get("colore", "")), ("DIMENSIONE", scheda.get("dimensione", ""))]
+  x_positions = [62, 294, 526]
+  for x, (etichetta, valore) in zip(x_positions, campi):
+    pdf.setFillColor(azzurro)
+    pdf.roundRect(x, pagina - 352, 212, 88, 12, fill=1, stroke=0)
+    pdf.setFillColor(blu)
+    pdf.setFont("Helvetica-Bold", 9)
+    pdf.drawString(x + 16, pagina - 290, etichetta)
+    pdf.setFillColor(testo_scuro)
+    pdf.setFont("Helvetica-Bold", 13)
+    testo_valore = str(valore).strip() or "—"
+    pdf.drawString(x + 16, pagina - 320, testo_valore[:24])
+
+  pdf.setFillColor(blu_scuro)
+  pdf.setFont("Helvetica-Bold", 11)
+  pdf.drawString(62, pagina - 395, "NOTE TECNICHE")
+  pdf.setFillColor(colors.white)
+  pdf.roundRect(62, 112, pagina - 124, 180, 14, fill=1, stroke=0)
+  pdf.setStrokeColor(colors.HexColor("#c7d9ec"))
+  pdf.roundRect(62, 112, pagina - 124, 180, 14, fill=0, stroke=1)
+  note = str(scheda.get("note", "")).strip() or "Nessuna nota tecnica inserita."
+  pdf.setFillColor(testo_scuro)
+  pdf.setFont("Helvetica", 12)
+  righe = []
+  for paragrafo in note.splitlines() or [note]:
+    parole = paragrafo.split()
+    riga = ""
+    for parola in parole:
+      candidata = f"{riga} {parola}".strip()
+      if pdf.stringWidth(candidata, "Helvetica", 12) > 650:
+        righe.append(riga)
+        riga = parola
+      else:
+        riga = candidata
+    righe.append(riga)
+  y = 260
+  for riga in righe[:8]:
+    pdf.drawString(84, y, riga)
+    y -= 20
+  pdf.setFillColor(grigio)
+  pdf.setFont("Helvetica", 8)
+  pdf.drawString(62, 58, "Scheda tecnica prodotto")
+  pdf.drawRightString(pagina - 62, 58, "ergo-scardaci")
+  pdf.save()
   return buffer.getvalue()
 
 
