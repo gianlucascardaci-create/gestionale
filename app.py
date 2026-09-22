@@ -931,112 +931,95 @@ def genera_pdf_lista_attrezzature(nome_evento, lista_prodotti):
 
 
 def genera_pdf_scheda_prodotto(prodotto):
-  """Genera una scheda tecnica quadrata 800x800 pt in stile catalogo premium."""
+  """Genera una scheda tecnica quadrata 800x800 pt, minimal e professionale."""
   buffer = BytesIO()
   pagina = 800
   pdf = ReportLabCanvas(buffer, pagesize=(pagina, pagina))
   blu = colors.HexColor("#083278")
-  blu_chiaro = colors.HexColor("#dce8f7")
-  fondo = colors.HexColor("#f7f9fc")
-  testo = colors.HexColor("#1c2c40")
-  grigio = colors.HexColor("#718096")
-  bianco = colors.white
+  blu_chiaro = colors.HexColor("#edf4fc")
+  caldo = colors.HexColor("#fbf7f0")
+  fondo = colors.HexColor("#fffdfa")
+  testo = colors.HexColor("#25364a")
+  secondario = colors.HexColor("#6d7885")
+  bordo = colors.HexColor("#d9e2ec")
 
   pdf.setFillColor(fondo)
   pdf.rect(0, 0, pagina, pagina, fill=1, stroke=0)
+  pdf.setStrokeColor(bordo)
+  pdf.setLineWidth(.8)
+  pdf.roundRect(34, 34, pagina - 68, pagina - 68, 18, fill=0, stroke=1)
 
-  # Colonna editoriale laterale.
+  # Intestazione sottile e orizzontale.
   pdf.setFillColor(blu)
-  pdf.rect(0, 0, 238, pagina, fill=1, stroke=0)
-  pdf.setFillColor(colors.HexColor("#164b91"))
-  pdf.rect(0, 0, 238, 10, fill=1, stroke=0)
-  pdf.setFillColor(bianco)
-  pdf.setFont("Helvetica-Bold", 12)
-  pdf.drawString(48, 724, "ERGO NOLEGGI")
-  pdf.setStrokeColor(colors.HexColor("#6f96c8"))
-  pdf.setLineWidth(1)
-  pdf.line(48, 704, 190, 704)
-  pdf.setFillColor(colors.HexColor("#bcd2ef"))
-  pdf.setFont("Helvetica-Bold", 10)
-  pdf.drawString(48, 646, "SCHEDA TECNICA")
+  pdf.roundRect(62, 704, 8, 42, 4, fill=1, stroke=0)
+  pdf.setFont("Helvetica-Bold", 11)
+  pdf.drawString(84, 728, "SCHEDA TECNICA · NOLEGGIO")
+  pdf.setFillColor(secondario)
   pdf.setFont("Helvetica", 9)
-  pdf.drawString(48, 626, "PRODOTTO PER IL NOLEGGIO")
+  pdf.drawRightString(738, 728, "Ergo Noleggi")
+  pdf.setStrokeColor(colors.HexColor("#cbd9e8"))
+  pdf.line(62, 695, 738, 695)
 
   nome = str(prodotto.get("nome", "Prodotto"))
-  pdf.setFillColor(bianco)
-  pdf.setFont("Helvetica-Bold", 29 if len(nome) < 24 else 23)
-  nome_parole = nome.split()
-  righe_nome = []
-  riga_nome = ""
-  for parola in nome_parole:
-    candidata = f"{riga_nome} {parola}".strip()
-    if pdf.stringWidth(candidata, "Helvetica-Bold", 29 if len(nome) < 24 else 23) > 170 and riga_nome:
-      righe_nome.append(riga_nome)
-      riga_nome = parola
-    else:
-      riga_nome = candidata
-  if riga_nome:
-    righe_nome.append(riga_nome)
-  y_nome = 548
-  for riga in righe_nome[:4]:
-    pdf.drawString(48, y_nome, riga)
-    y_nome -= 34
-  pdf.setFillColor(colors.HexColor("#bcd2ef"))
-  pdf.setFont("Helvetica", 9)
-  pdf.drawString(48, 92, "Informazioni tecniche")
-  pdf.drawString(48, 76, "per la disponibilità a noleggio")
-
-  # Area destra, impostata come scheda e-commerce.
   pdf.setFillColor(testo)
-  pdf.setFont("Helvetica-Bold", 21)
-  pdf.drawString(286, 718, "Dettagli prodotto")
-  pdf.setFillColor(grigio)
-  pdf.setFont("Helvetica", 10)
-  pdf.drawString(286, 696, "Specifiche essenziali per la scelta del prodotto")
-  pdf.setStrokeColor(colors.HexColor("#d5dfeb"))
-  pdf.line(286, 676, 744, 676)
+  pdf.setFont("Helvetica-Bold", 31 if len(nome) < 28 else 25)
+  pdf.drawString(62, 620, nome[:50])
+  pdf.setFillColor(secondario)
+  pdf.setFont("Helvetica", 11)
+  pdf.drawString(62, 590, "Informazioni tecniche del prodotto")
 
   scheda = dati_scheda_tecnica(prodotto.get("scheda_tecnica"))
-  campi = [("Materiale", scheda.get("materiale", "")), ("Colore", scheda.get("colore", "")), ("Dimensione", scheda.get("dimensione", ""))]
-  y = 618
-  for indice, (etichetta, valore) in enumerate(campi):
-    pdf.setFillColor(blu_chiaro if indice % 2 == 0 else bianco)
-    pdf.roundRect(286, y - 38, 458, 58, 9, fill=1, stroke=0)
+
+  def card(x, etichetta, valore):
+    pdf.setFillColor(blu_chiaro)
+    pdf.roundRect(x, 438, 212, 106, 14, fill=1, stroke=0)
     pdf.setFillColor(blu)
+    pdf.circle(x + 21, 514, 4, fill=1, stroke=0)
     pdf.setFont("Helvetica-Bold", 9)
-    pdf.drawString(306, y, etichetta.upper())
+    pdf.drawString(x + 34, 510, etichetta.upper())
     pdf.setFillColor(testo)
     pdf.setFont("Helvetica-Bold", 13)
-    pdf.drawString(306, y - 22, str(valore).strip() or "Non specificato")
-    y -= 76
+    valore_testo = str(valore).strip() or "Non specificato"
+    pdf.drawString(x + 20, 474, valore_testo[:25])
+
+  card(62, "Materiale", scheda.get("materiale", ""))
+  card(294, "Colore", scheda.get("colore", ""))
+  card(526, "Dimensione", scheda.get("dimensione", ""))
 
   pdf.setFillColor(blu)
   pdf.setFont("Helvetica-Bold", 11)
-  pdf.drawString(286, 354, "Note tecniche")
-  pdf.setFillColor(bianco)
-  pdf.roundRect(286, 132, 458, 194, 12, fill=1, stroke=0)
-  pdf.setStrokeColor(colors.HexColor("#cbd9e8"))
-  pdf.roundRect(286, 132, 458, 194, 12, fill=0, stroke=1)
+  pdf.drawString(62, 392, "NOTE TECNICHE")
+  pdf.setFillColor(secondario)
+  pdf.setFont("Helvetica", 9)
+  pdf.drawRightString(738, 392, "Dettagli utili per il noleggio")
+  pdf.setFillColor(caldo)
+  pdf.roundRect(62, 150, pagina - 124, 216, 14, fill=1, stroke=0)
+  pdf.setStrokeColor(colors.HexColor("#eadfce"))
+  pdf.roundRect(62, 150, pagina - 124, 216, 14, fill=0, stroke=1)
+
   note = str(scheda.get("note", "")).strip() or "Nessuna nota tecnica inserita."
   pdf.setFillColor(testo)
-  pdf.setFont("Helvetica", 11)
+  pdf.setFont("Helvetica", 12)
   righe = []
   for paragrafo in note.splitlines() or [note]:
     parole = paragrafo.split()
     riga = ""
     for parola in parole:
       candidata = f"{riga} {parola}".strip()
-      if pdf.stringWidth(candidata, "Helvetica", 11) > 400:
+      if pdf.stringWidth(candidata, "Helvetica", 12) > 630:
         righe.append(riga)
         riga = parola
       else:
         riga = candidata
     righe.append(riga)
-  y_note = 290
-  for riga in righe[:8]:
-    pdf.drawString(310, y_note, riga)
-    y_note -= 20
+  y = 324
+  for riga in righe[:9]:
+    pdf.drawString(86, y, riga)
+    y -= 21
 
+  pdf.setFillColor(secondario)
+  pdf.setFont("Helvetica", 8)
+  pdf.drawString(62, 78, "Scheda tecnica prodotto")
   pdf.save()
   return buffer.getvalue()
 
