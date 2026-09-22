@@ -897,42 +897,39 @@ def genera_pdf_lista_attrezzature(nome_evento, lista_prodotti):
 
 
 def genera_pdf_scheda_prodotto(prodotto):
-  """Genera una scheda prodotto PDF con intestazione e dettagli blu."""
+  """Genera un PDF tecnico contenente solo nome prodotto e scheda tecnica."""
   buffer = BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
   styles = getSampleStyleSheet()
-  titolo = ParagraphStyle("SchedaTitolo", parent=styles["Title"], fontSize=20, leading=24, textColor=colors.HexColor("#0056b3"), spaceAfter=16)
-  sezione = ParagraphStyle("SchedaSezione", parent=styles["Heading2"], fontSize=12, leading=15, textColor=colors.HexColor("#0056b3"), spaceBefore=12, spaceAfter=7)
-  testo = ParagraphStyle("SchedaTesto", parent=styles["BodyText"], fontSize=10, leading=14, textColor=colors.HexColor("#263238"))
-  nome = str(prodotto.get("nome", "Prodotto"))
-  story = [Paragraph("SCHEDA PRODOTTO", titolo), Paragraph(f"<b>{nome}</b>", sezione)]
-  dati = [
-      ["Codice", str(prodotto.get("codice", "-"))],
-      ["Categorie", str(prodotto.get("categoria", "-"))],
-      ["Quantità", str(prodotto.get("quantita", 0))],
-      ["Posizione", str(prodotto.get("posizione", "-"))],
-      ["Prezzo di noleggio", f"{prodotto.get('costo_noleggio', 0)} €"],
-  ]
-  tabella = Table(dati, colWidths=[150, 350])
-  tabella.setStyle(TableStyle([
-      ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#eaf3ff")),
-      ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#0056b3")),
-      ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-      ("GRID", (0, 0), (-1, -1), .5, colors.HexColor("#b8c7dc")),
-      ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-      ("LEFTPADDING", (0, 0), (-1, -1), 9),
-      ("RIGHTPADDING", (0, 0), (-1, -1), 9),
-      ("TOPPADDING", (0, 0), (-1, -1), 8),
-      ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+  titolo = ParagraphStyle("SchedaTitolo", parent=styles["Title"], fontSize=21, leading=25, textColor=colors.HexColor("#0056b3"), alignment=1, spaceAfter=18)
+  nome_style = ParagraphStyle("SchedaNome", parent=styles["Heading1"], fontSize=17, leading=21, textColor=colors.HexColor("#123a63"), alignment=1, spaceAfter=0)
+  sezione = ParagraphStyle("SchedaSezione", parent=styles["Heading2"], fontSize=13, leading=16, textColor=colors.HexColor("#0056b3"), spaceBefore=18, spaceAfter=8)
+  testo = ParagraphStyle("SchedaTesto", parent=styles["BodyText"], fontSize=11, leading=17, textColor=colors.HexColor("#263238"), alignment=0)
+  nome = str(prodotto.get("nome", "Prodotto")).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+  story = [Paragraph("SCHEDA TECNICA", titolo)]
+  nome_box = Table([[Paragraph(nome, nome_style)]], colWidths=[500])
+  nome_box.setStyle(TableStyle([
+      ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#eaf3ff")),
+      ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#0056b3")),
+      ("TOPPADDING", (0, 0), (-1, -1), 16),
+      ("BOTTOMPADDING", (0, 0), (-1, -1), 16),
+      ("LEFTPADDING", (0, 0), (-1, -1), 12),
+      ("RIGHTPADDING", (0, 0), (-1, -1), 12),
   ]))
-  story.append(tabella)
-  story.append(Paragraph("Scheda tecnica", sezione))
+  story.append(nome_box)
+  story.append(Paragraph("Descrizione tecnica", sezione))
   scheda = str(prodotto.get("scheda_tecnica") or "Nessuna scheda tecnica inserita.")
-  story.append(Paragraph(scheda.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>"), testo))
-  if prodotto.get("note"):
-    story.append(Paragraph("Note", sezione))
-    note = str(prodotto.get("note")).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
-    story.append(Paragraph(note, testo))
+  scheda_html = scheda.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
+  testo_box = Table([[Paragraph(scheda_html, testo)]], colWidths=[500])
+  testo_box.setStyle(TableStyle([
+      ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f7fbff")),
+      ("BOX", (0, 0), (-1, -1), .7, colors.HexColor("#b8c7dc")),
+      ("TOPPADDING", (0, 0), (-1, -1), 16),
+      ("BOTTOMPADDING", (0, 0), (-1, -1), 16),
+      ("LEFTPADDING", (0, 0), (-1, -1), 16),
+      ("RIGHTPADDING", (0, 0), (-1, -1), 16),
+  ]))
+  story.append(testo_box)
   doc.build(story)
   return buffer.getvalue()
 
@@ -1625,13 +1622,11 @@ def modale_gestione_prodotto():
       f_nome = str_lit.text_input("🏷️ Nome Prodotto", value=p_edit.get("nome", ""))
       f_codice = str_lit.text_input("🆔 Codice Identificativo", value=p_edit.get("codice", ""))
 
-      cat_correnti = categorie_prodotto(p_edit.get("categoria", "TAVOLI"))
+      cat_correnti = categorie_prodotto(p_edit.get("categoria", ""))
       cat_default = [cat for cat in cat_correnti if cat in CATEGORIE_PRODOTTI]
-      if not cat_default:
-        cat_default = [CATEGORIE_PRODOTTI[0]]
-      str_lit.markdown("**📂 Categorie (puoi sceglierne più di una)**")
+      str_lit.markdown("**📂 Categorie (seleziona almeno una categoria)**")
       f_categorie = []
-      cat_key_suffix = str(p_edit.get("id") or p_edit.get("codice") or "nuovo")
+      cat_key_suffix = str(p_edit.get("id") or p_edit.get("codice") or str_lit.session_state.get("nuovo_prodotto_key", "nuovo"))
       for cat_start in range(0, len(CATEGORIE_PRODOTTI), 3):
         cat_cols = str_lit.columns(3)
         for cat_pos, cat_nome in enumerate(CATEGORIE_PRODOTTI[cat_start:cat_start + 3]):
@@ -1669,6 +1664,9 @@ def modale_gestione_prodotto():
     )
 
     if str_lit.form_submit_button("💾 Salva Prodotto", type="primary", use_container_width=True):
+      if not f_categorie:
+        str_lit.error("Seleziona almeno una categoria prima di salvare il prodotto.")
+        return
       percorso_foto_finale = (
           salva_immagine_su_disco(f_foto)
           if f_foto
@@ -1679,7 +1677,7 @@ def modale_gestione_prodotto():
           "id": p_edit.get("id"),
           "codice": f_codice.strip(),
           "nome": f_nome,
-          "categoria": ", ".join(f_categorie) if f_categorie else CATEGORIE_PRODOTTI[0],
+          "categoria": ", ".join(f_categorie),
           "quantita": f_qta,
           "posizione": f_pos,
           "costo_noleggio": f_prezzo,
@@ -2329,6 +2327,7 @@ else:
           ):
             str_lit.session_state.modale_prodotto = "nuovo"
             str_lit.session_state.prodotto_in_modifica = {}
+            str_lit.session_state.nuovo_prodotto_key = str(uuid.uuid4())
             modale_gestione_prodotto()
 
       with col_cat_filtro:
