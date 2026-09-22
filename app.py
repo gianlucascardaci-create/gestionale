@@ -931,87 +931,112 @@ def genera_pdf_lista_attrezzature(nome_evento, lista_prodotti):
 
 
 def genera_pdf_scheda_prodotto(prodotto):
-  """Genera una scheda tecnica quadrata 800x800 pt con layout commerciale moderno."""
+  """Genera una scheda tecnica quadrata 800x800 pt in stile catalogo premium."""
   buffer = BytesIO()
   pagina = 800
   pdf = ReportLabCanvas(buffer, pagesize=(pagina, pagina))
   blu = colors.HexColor("#083278")
   blu_chiaro = colors.HexColor("#dce8f7")
-  sfondo = colors.white
-  testo_scuro = colors.HexColor("#1d2b3d")
-  bordo = colors.HexColor("#c7d7ea")
+  fondo = colors.HexColor("#f7f9fc")
+  testo = colors.HexColor("#1c2c40")
+  grigio = colors.HexColor("#718096")
+  bianco = colors.white
 
-  pdf.setFillColor(sfondo)
+  pdf.setFillColor(fondo)
   pdf.rect(0, 0, pagina, pagina, fill=1, stroke=0)
-  # Intestazione editoriale pulita, coerente con una scheda prodotto online.
-  pdf.setFillColor(blu)
-  pdf.rect(62, pagina - 78, 7, 42, fill=1, stroke=0)
-  pdf.setFillColor(blu)
-  pdf.setFont("Helvetica-Bold", 11)
-  pdf.drawString(84, pagina - 52, "SCHEDA TECNICA · NOLEGGIO")
-  pdf.setFillColor(colors.HexColor("#68788c"))
-  pdf.setFont("Helvetica", 9)
-  pdf.drawRightString(pagina - 62, pagina - 52, "Ergo Noleggi")
-  pdf.setStrokeColor(bordo)
-  pdf.setLineWidth(1)
-  pdf.line(62, pagina - 92, pagina - 62, pagina - 92)
-  nome = str(prodotto.get("nome", "Prodotto"))
-  pdf.setFillColor(testo_scuro)
-  pdf.setFont("Helvetica-Bold", 30 if len(nome) < 28 else 24)
-  pdf.drawString(62, pagina - 150, nome[:50])
 
+  # Colonna editoriale laterale.
   pdf.setFillColor(blu)
+  pdf.rect(0, 0, 238, pagina, fill=1, stroke=0)
+  pdf.setFillColor(colors.HexColor("#164b91"))
+  pdf.rect(0, 0, 238, 10, fill=1, stroke=0)
+  pdf.setFillColor(bianco)
+  pdf.setFont("Helvetica-Bold", 12)
+  pdf.drawString(48, 724, "ERGO NOLEGGI")
+  pdf.setStrokeColor(colors.HexColor("#6f96c8"))
+  pdf.setLineWidth(1)
+  pdf.line(48, 704, 190, 704)
+  pdf.setFillColor(colors.HexColor("#bcd2ef"))
+  pdf.setFont("Helvetica-Bold", 10)
+  pdf.drawString(48, 646, "SCHEDA TECNICA")
+  pdf.setFont("Helvetica", 9)
+  pdf.drawString(48, 626, "PRODOTTO PER IL NOLEGGIO")
+
+  nome = str(prodotto.get("nome", "Prodotto"))
+  pdf.setFillColor(bianco)
+  pdf.setFont("Helvetica-Bold", 29 if len(nome) < 24 else 23)
+  nome_parole = nome.split()
+  righe_nome = []
+  riga_nome = ""
+  for parola in nome_parole:
+    candidata = f"{riga_nome} {parola}".strip()
+    if pdf.stringWidth(candidata, "Helvetica-Bold", 29 if len(nome) < 24 else 23) > 170 and riga_nome:
+      righe_nome.append(riga_nome)
+      riga_nome = parola
+    else:
+      riga_nome = candidata
+  if riga_nome:
+    righe_nome.append(riga_nome)
+  y_nome = 548
+  for riga in righe_nome[:4]:
+    pdf.drawString(48, y_nome, riga)
+    y_nome -= 34
+  pdf.setFillColor(colors.HexColor("#bcd2ef"))
+  pdf.setFont("Helvetica", 9)
+  pdf.drawString(48, 92, "Informazioni tecniche")
+  pdf.drawString(48, 76, "per la disponibilità a noleggio")
+
+  # Area destra, impostata come scheda e-commerce.
+  pdf.setFillColor(testo)
+  pdf.setFont("Helvetica-Bold", 21)
+  pdf.drawString(286, 718, "Dettagli prodotto")
+  pdf.setFillColor(grigio)
   pdf.setFont("Helvetica", 10)
-  pdf.drawString(62, pagina - 184, "Informazioni tecniche del prodotto disponibile per il noleggio")
-  pdf.setStrokeColor(colors.HexColor("#b9d2ee"))
-  pdf.line(62, pagina - 205, pagina - 62, pagina - 205)
+  pdf.drawString(286, 696, "Specifiche essenziali per la scelta del prodotto")
+  pdf.setStrokeColor(colors.HexColor("#d5dfeb"))
+  pdf.line(286, 676, 744, 676)
 
   scheda = dati_scheda_tecnica(prodotto.get("scheda_tecnica"))
-  campi = [("MATERIALE", scheda.get("materiale", "")), ("COLORE", scheda.get("colore", "")), ("DIMENSIONE", scheda.get("dimensione", ""))]
-  x_positions = [62, 294, 526]
-  for x, (etichetta, valore) in zip(x_positions, campi):
-    pdf.setFillColor(colors.white)
-    pdf.roundRect(x, pagina - 360, 212, 92, 12, fill=1, stroke=0)
-    pdf.setStrokeColor(bordo)
-    pdf.roundRect(x, pagina - 360, 212, 92, 12, fill=0, stroke=1)
+  campi = [("Materiale", scheda.get("materiale", "")), ("Colore", scheda.get("colore", "")), ("Dimensione", scheda.get("dimensione", ""))]
+  y = 618
+  for indice, (etichetta, valore) in enumerate(campi):
+    pdf.setFillColor(blu_chiaro if indice % 2 == 0 else bianco)
+    pdf.roundRect(286, y - 38, 458, 58, 9, fill=1, stroke=0)
     pdf.setFillColor(blu)
-    pdf.roundRect(x, pagina - 360, 6, 92, 3, fill=1, stroke=0)
-    pdf.setFillColor(blu)
-    pdf.setFont("Helvetica-Bold", 8)
-    pdf.drawString(x + 18, pagina - 294, etichetta)
-    pdf.setFillColor(testo_scuro)
-    pdf.setFont("Helvetica-Bold", 12)
-    testo_valore = str(valore).strip() or "—"
-    pdf.drawString(x + 18, pagina - 326, testo_valore[:24])
+    pdf.setFont("Helvetica-Bold", 9)
+    pdf.drawString(306, y, etichetta.upper())
+    pdf.setFillColor(testo)
+    pdf.setFont("Helvetica-Bold", 13)
+    pdf.drawString(306, y - 22, str(valore).strip() or "Non specificato")
+    y -= 76
 
   pdf.setFillColor(blu)
   pdf.setFont("Helvetica-Bold", 11)
-  pdf.drawString(62, 404, "NOTE TECNICHE")
-  pdf.setFillColor(colors.white)
-  pdf.roundRect(62, 148, pagina - 124, 228, 14, fill=1, stroke=0)
-  pdf.setStrokeColor(bordo)
-  pdf.roundRect(62, 148, pagina - 124, 228, 14, fill=0, stroke=1)
-  pdf.setFillColor(blu_chiaro)
-  pdf.roundRect(62, 348, pagina - 124, 28, 14, fill=1, stroke=0)
+  pdf.drawString(286, 354, "Note tecniche")
+  pdf.setFillColor(bianco)
+  pdf.roundRect(286, 132, 458, 194, 12, fill=1, stroke=0)
+  pdf.setStrokeColor(colors.HexColor("#cbd9e8"))
+  pdf.roundRect(286, 132, 458, 194, 12, fill=0, stroke=1)
   note = str(scheda.get("note", "")).strip() or "Nessuna nota tecnica inserita."
-  pdf.setFillColor(testo_scuro)
-  pdf.setFont("Helvetica", 12)
+  pdf.setFillColor(testo)
+  pdf.setFont("Helvetica", 11)
   righe = []
   for paragrafo in note.splitlines() or [note]:
     parole = paragrafo.split()
     riga = ""
     for parola in parole:
       candidata = f"{riga} {parola}".strip()
-      if pdf.stringWidth(candidata, "Helvetica", 12) > 650:
+      if pdf.stringWidth(candidata, "Helvetica", 11) > 400:
         righe.append(riga)
         riga = parola
       else:
         riga = candidata
     righe.append(riga)
-  y = 326
-  for riga in righe[:10]:
-    pdf.drawString(84, y, riga)
-    y -= 20
+  y_note = 290
+  for riga in righe[:8]:
+    pdf.drawString(310, y_note, riga)
+    y_note -= 20
+
   pdf.save()
   return buffer.getvalue()
 
