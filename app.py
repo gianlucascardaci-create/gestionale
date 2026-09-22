@@ -25,7 +25,7 @@ try:
   from reportlab.lib.pagesizes import letter
   from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
   from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle, Image as ReportLabImage
-  from reportlab.pdfgen import canvas as ReportLabCanvas
+  from reportlab.pdfgen.canvas import Canvas as ReportLabCanvas
   REPORTLAB_DISPONIBILE = True
 except ImportError:
   REPORTLAB_DISPONIBILE = False
