@@ -935,8 +935,8 @@ def genera_pdf_scheda_prodotto(prodotto):
   buffer = BytesIO()
   pagina = 800
   pdf = ReportLabCanvas(buffer, pagesize=(pagina, pagina))
-  blu = colors.HexColor("#0759b8")
-  blu_scuro = colors.HexColor("#123765")
+  blu = colors.HexColor("#083278")
+  blu_scuro = colors.HexColor("#083278")
   azzurro = colors.HexColor("#eaf3ff")
   testo_scuro = colors.HexColor("#26384d")
   grigio = colors.HexColor("#6b7b8f")
@@ -951,7 +951,7 @@ def genera_pdf_scheda_prodotto(prodotto):
   pdf.setFont("Helvetica-Bold", 15)
   pdf.drawString(62, pagina - 70, "SCHEDA TECNICA")
   pdf.setFont("Helvetica", 9)
-  pdf.drawRightString(pagina - 62, pagina - 70, "ERGO & SCARDACI")
+  pdf.drawRightString(pagina - 62, pagina - 70, "Ergo Noleggi")
 
   nome = str(prodotto.get("nome", "Prodotto"))
   pdf.setFont("Helvetica-Bold", 31 if len(nome) < 28 else 25)
@@ -979,7 +979,7 @@ def genera_pdf_scheda_prodotto(prodotto):
 
   pdf.setFillColor(blu_scuro)
   pdf.setFont("Helvetica-Bold", 11)
-  pdf.drawString(62, pagina - 395, "NOTE TECNICHE")
+  pdf.drawString(62, 316, "NOTE TECNICHE")
   pdf.setFillColor(colors.white)
   pdf.roundRect(62, 112, pagina - 124, 180, 14, fill=1, stroke=0)
   pdf.setStrokeColor(colors.HexColor("#c7d9ec"))
