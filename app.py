@@ -937,7 +937,6 @@ def genera_pdf_scheda_prodotto(prodotto):
   pdf = ReportLabCanvas(buffer, pagesize=(pagina, pagina))
   blu = colors.HexColor("#083278")
   blu_chiaro = colors.HexColor("#edf4fc")
-  caldo = colors.HexColor("#fbf7f0")
   fondo = colors.HexColor("#fffdfa")
   testo = colors.HexColor("#25364a")
   secondario = colors.HexColor("#6d7885")
@@ -992,7 +991,7 @@ def genera_pdf_scheda_prodotto(prodotto):
   pdf.setFillColor(secondario)
   pdf.setFont("Helvetica", 9)
   pdf.drawRightString(738, 392, "Dettagli utili per il noleggio")
-  pdf.setFillColor(caldo)
+  pdf.setFillColor(blu_chiaro)
   pdf.roundRect(62, 150, pagina - 124, 216, 14, fill=1, stroke=0)
   pdf.setStrokeColor(colors.HexColor("#eadfce"))
   pdf.roundRect(62, 150, pagina - 124, 216, 14, fill=0, stroke=1)
@@ -1042,7 +1041,8 @@ def mostra_scheda_prodotto(indice):
   if not any(scheda.values()):
     str_lit.info("Nessuna informazione tecnica inserita.")
   pdf = genera_pdf_scheda_prodotto(prodotto)
-  str_lit.download_button("⬇️ Scarica scheda prodotto in PDF", data=pdf, file_name=f"Scheda_{prodotto.get('codice') or prodotto.get('nome', 'prodotto')}.pdf", mime="application/pdf", type="primary", use_container_width=True)
+  nome_file_pdf = re.sub(r"[^\w\s-]", "", str(prodotto.get("nome") or "prodotto"), flags=re.UNICODE).strip().replace(" ", "_") or "prodotto"
+  str_lit.download_button("⬇️ Scarica scheda prodotto in PDF", data=pdf, file_name=f"Scheda_{nome_file_pdf}.pdf", mime="application/pdf", type="primary", use_container_width=True)
 
 
 if "utenti_autorizzati" not in str_lit.session_state:
