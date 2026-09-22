@@ -315,6 +315,22 @@ def categorie_prodotto(valore):
   return [parte.strip() for parte in str(valore).split(",") if parte.strip()]
 
 
+def dati_scheda_tecnica(valore):
+  """Legge la scheda nuova a campi e mantiene compatibilità con il vecchio testo libero."""
+  campi_vuoti = {"materiale": "", "colore": "", "dimensione": "", "note": ""}
+  if isinstance(valore, dict):
+    return {chiave: str(valore.get(chiave) or "") for chiave in campi_vuoti}
+  testo = str(valore or "")
+  if testo:
+    try:
+      decodificato = json.loads(testo)
+      if isinstance(decodificato, dict):
+        return {chiave: str(decodificato.get(chiave) or "") for chiave in campi_vuoti}
+    except (TypeError, ValueError, json.JSONDecodeError):
+      campi_vuoti["note"] = testo
+  return campi_vuoti
+
+
 def testo_categorie(valore):
   categorie = categorie_prodotto(valore)
   return ", ".join(categorie) if categorie else "N/D"
@@ -917,13 +933,24 @@ def genera_pdf_scheda_prodotto(prodotto):
       ("RIGHTPADDING", (0, 0), (-1, -1), 12),
   ]))
   story.append(nome_box)
-  story.append(Paragraph("Descrizione tecnica", sezione))
-  scheda = str(prodotto.get("scheda_tecnica") or "Nessuna scheda tecnica inserita.")
-  scheda_html = scheda.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
-  testo_box = Table([[Paragraph(scheda_html, testo)]], colWidths=[500])
+  story.append(Paragraph("Caratteristiche tecniche", sezione))
+  scheda = dati_scheda_tecnica(prodotto.get("scheda_tecnica"))
+  righe_tecniche = []
+  for etichetta, chiave in (("Materiale", "materiale"), ("Colore", "colore"), ("Dimensione", "dimensione"), ("Note", "note")):
+    valore = scheda.get(chiave, "").strip()
+    if valore:
+      valore_html = valore.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
+      righe_tecniche.append([Paragraph(f"<b>{etichetta}</b>", testo), Paragraph(valore_html, testo)])
+  if not righe_tecniche:
+    righe_tecniche.append([Paragraph("<b>Scheda tecnica</b>", testo), Paragraph("Nessuna informazione inserita.", testo)])
+  testo_box = Table(righe_tecniche, colWidths=[125, 375])
   testo_box.setStyle(TableStyle([
-      ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f7fbff")),
+      ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#eaf3ff")),
+      ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#0056b3")),
+      ("BACKGROUND", (1, 0), (1, -1), colors.HexColor("#f7fbff")),
       ("BOX", (0, 0), (-1, -1), .7, colors.HexColor("#b8c7dc")),
+      ("INNERGRID", (0, 0), (-1, -1), .4, colors.HexColor("#d5e0ed")),
+      ("VALIGN", (0, 0), (-1, -1), "TOP"),
       ("TOPPADDING", (0, 0), (-1, -1), 16),
       ("BOTTOMPADDING", (0, 0), (-1, -1), 16),
       ("LEFTPADDING", (0, 0), (-1, -1), 16),
@@ -942,9 +969,15 @@ def mostra_scheda_prodotto(indice):
     return
   prodotto = prodotti[indice]
   str_lit.markdown(f"## {prodotto.get('nome', 'Prodotto')}")
-  str_lit.markdown(f"**Codice:** {prodotto.get('codice', '-')}  |  **Categorie:** {prodotto.get('categoria', '-')}  |  **Quantità:** {prodotto.get('quantita', 0)}")
   str_lit.markdown("### Scheda tecnica")
-  str_lit.info(prodotto.get("scheda_tecnica") or "Nessuna scheda tecnica inserita.")
+  scheda = dati_scheda_tecnica(prodotto.get("scheda_tecnica"))
+  for etichetta, chiave in (("Materiale", "materiale"), ("Colore", "colore"), ("Dimensione", "dimensione"), ("Note", "note")):
+    valore = scheda.get(chiave, "").strip()
+    if valore:
+      str_lit.markdown(f"**{etichetta}:**")
+      str_lit.info(valore)
+  if not any(scheda.values()):
+    str_lit.info("Nessuna informazione tecnica inserita.")
   pdf = genera_pdf_scheda_prodotto(prodotto)
   str_lit.download_button("⬇️ Scarica scheda prodotto in PDF", data=pdf, file_name=f"Scheda_{prodotto.get('codice') or prodotto.get('nome', 'prodotto')}.pdf", mime="application/pdf", type="primary", use_container_width=True)
 
@@ -1596,6 +1629,9 @@ def modale_gestione_prodotto():
       if MODO == "modifica"
       else "🆕 Aggiungi Nuovo Prodotto"
   )
+  ruolo_prodotto = (str_lit.session_state.get("utente_loggato") or {}).get("ruolo", "")
+  puo_modificare_scheda = ruolo_prodotto == "Amministratore"
+  scheda_corrente = dati_scheda_tecnica(p_edit.get("scheda_tecnica"))
   str_lit.markdown(f"#### {testo_titolo_prodotto}")
 
   if MODO == "modifica" and p_edit.get("codice"):
@@ -1651,12 +1687,11 @@ def modale_gestione_prodotto():
           value=float(p_edit.get("costo_noleggio", 0.0)),
           min_value=0.0,
       )
-      f_scheda_tecnica = str_lit.text_area(
-          "📄 Scheda tecnica",
-          value=p_edit.get("scheda_tecnica", ""),
-          height=170,
-          placeholder="Inserisci caratteristiche, misure, materiali, istruzioni o altre informazioni tecniche...",
-      )
+      str_lit.markdown("**📄 Scheda tecnica**")
+      f_materiale = str_lit.text_input("Materiale", value=scheda_corrente["materiale"], disabled=not puo_modificare_scheda)
+      f_colore = str_lit.text_input("Colore", value=scheda_corrente["colore"], disabled=not puo_modificare_scheda)
+      f_dimensione = str_lit.text_input("Dimensione", value=scheda_corrente["dimensione"], disabled=not puo_modificare_scheda)
+      f_note_tecnica = str_lit.text_area("Note", value=scheda_corrente["note"], height=120, disabled=not puo_modificare_scheda)
 
     f_note = str_lit.text_area("📝 Note (opzionale)", value=p_edit.get("note", ""))
     f_foto = str_lit.file_uploader(
@@ -1682,7 +1717,12 @@ def modale_gestione_prodotto():
           "posizione": f_pos,
           "costo_noleggio": f_prezzo,
           "note": f_note,
-          "scheda_tecnica": f_scheda_tecnica,
+          "scheda_tecnica": json.dumps({
+              "materiale": f_materiale.strip(),
+              "colore": f_colore.strip(),
+              "dimensione": f_dimensione.strip(),
+              "note": f_note_tecnica.strip(),
+          }, ensure_ascii=False),
           "foto_path": percorso_foto_finale,
       }
 
@@ -2413,16 +2453,13 @@ else:
                 str_lit.markdown("<div class='prodotto-griglia-nota'></div>", unsafe_allow_html=True)
 
               if is_admin:
-                col_mod, col_scheda, col_del = str_lit.columns(3)
+                col_mod, col_del = str_lit.columns(2)
                 with col_mod:
                   if str_lit.button("✏️", key=f"edit_{idx}", help="Modifica", use_container_width=True):
                     str_lit.session_state.modale_prodotto = "modifica"
                     str_lit.session_state.prodotto_in_modifica = p
                     str_lit.session_state.indice_modifica = idx
                     modale_gestione_prodotto()
-                with col_scheda:
-                  if str_lit.button("Scheda", key=f"scheda_prodotto_{idx}", help="Apri scheda prodotto", use_container_width=True):
-                    mostra_scheda_prodotto(idx)
                 with col_del:
                   with str_lit.popover("🗑️", help="Elimina"):
                     str_lit.warning("Eliminazione definitiva")
@@ -2440,6 +2477,8 @@ else:
                       str_lit.session_state.prodotti_noleggio.pop(idx)
                       salva_dati_esterni()
                       str_lit.rerun()
+              if str_lit.button("Scheda", key=f"scheda_prodotto_{idx}", help="Apri scheda prodotto", use_container_width=True):
+                mostra_scheda_prodotto(idx)
 
 
     elif str_lit.session_state.area_selezionata == "opzione_2":
