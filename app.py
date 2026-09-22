@@ -2453,13 +2453,16 @@ else:
                 str_lit.markdown("<div class='prodotto-griglia-nota'></div>", unsafe_allow_html=True)
 
               if is_admin:
-                col_mod, col_del = str_lit.columns(2)
+                col_mod, col_scheda, col_del = str_lit.columns(3)
                 with col_mod:
                   if str_lit.button("✏️", key=f"edit_{idx}", help="Modifica", use_container_width=True):
                     str_lit.session_state.modale_prodotto = "modifica"
                     str_lit.session_state.prodotto_in_modifica = p
                     str_lit.session_state.indice_modifica = idx
                     modale_gestione_prodotto()
+                with col_scheda:
+                  if str_lit.button("Scheda", key=f"scheda_prodotto_{idx}", help="Apri scheda prodotto", use_container_width=True):
+                    mostra_scheda_prodotto(idx)
                 with col_del:
                   with str_lit.popover("🗑️", help="Elimina"):
                     str_lit.warning("Eliminazione definitiva")
@@ -2477,8 +2480,9 @@ else:
                       str_lit.session_state.prodotti_noleggio.pop(idx)
                       salva_dati_esterni()
                       str_lit.rerun()
-              if str_lit.button("Scheda", key=f"scheda_prodotto_{idx}", help="Apri scheda prodotto", use_container_width=True):
-                mostra_scheda_prodotto(idx)
+              else:
+                if str_lit.button("Scheda", key=f"scheda_prodotto_{idx}", help="Apri scheda prodotto", use_container_width=True):
+                  mostra_scheda_prodotto(idx)
 
 
     elif str_lit.session_state.area_selezionata == "opzione_2":
