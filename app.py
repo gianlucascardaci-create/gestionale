@@ -453,9 +453,15 @@ def carica_dati_esterni():
   try:
     # Vengono richiesti solo i campi necessari; gli allegati restano nel DB
     # ma non vengono caricati nella pagina del magazzino.
-    res_prod = supabase.table("prodotti_noleggio").select(
-        "id,codice,nome,categoria,quantita,posizione,costo_noleggio,note,foto_path"
-    ).order("nome").execute()
+    try:
+      res_prod = supabase.table("prodotti_noleggio").select(
+          "id,codice,nome,categoria,quantita,posizione,costo_noleggio,note,foto_path,scheda_tecnica"
+      ).order("nome").execute()
+    except Exception:
+      # Compatibilità temporanea con Supabase prima dell'esecuzione della migrazione SQL.
+      res_prod = supabase.table("prodotti_noleggio").select(
+          "id,codice,nome,categoria,quantita,posizione,costo_noleggio,note,foto_path"
+      ).order("nome").execute()
     prodotti = res_prod.data or []
     try:
       res_nol = supabase.table("noleggi").select("*").order("inizio").execute()
@@ -510,7 +516,7 @@ def salva_dati_esterni():
     for p in str_lit.session_state.prodotti_noleggio:
       payload = {k: p.get(k) for k in (
           "codice", "nome", "categoria", "quantita", "posizione",
-          "costo_noleggio", "note", "foto_path")}
+          "costo_noleggio", "note", "foto_path", "scheda_tecnica")}
       payload = {k: v for k, v in payload.items() if v is not None}
       if p.get("id"):
         res = supabase.table("prodotti_noleggio").update(payload).eq("id", p["id"]).execute()
@@ -888,6 +894,62 @@ def genera_pdf_lista_attrezzature(nome_evento, lista_prodotti):
 
   doc.build(story)
   return buffer.getvalue()
+
+
+def genera_pdf_scheda_prodotto(prodotto):
+  """Genera una scheda prodotto PDF con intestazione e dettagli blu."""
+  buffer = BytesIO()
+  doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+  styles = getSampleStyleSheet()
+  titolo = ParagraphStyle("SchedaTitolo", parent=styles["Title"], fontSize=20, leading=24, textColor=colors.HexColor("#0056b3"), spaceAfter=16)
+  sezione = ParagraphStyle("SchedaSezione", parent=styles["Heading2"], fontSize=12, leading=15, textColor=colors.HexColor("#0056b3"), spaceBefore=12, spaceAfter=7)
+  testo = ParagraphStyle("SchedaTesto", parent=styles["BodyText"], fontSize=10, leading=14, textColor=colors.HexColor("#263238"))
+  nome = str(prodotto.get("nome", "Prodotto"))
+  story = [Paragraph("SCHEDA PRODOTTO", titolo), Paragraph(f"<b>{nome}</b>", sezione)]
+  dati = [
+      ["Codice", str(prodotto.get("codice", "-"))],
+      ["Categorie", str(prodotto.get("categoria", "-"))],
+      ["Quantità", str(prodotto.get("quantita", 0))],
+      ["Posizione", str(prodotto.get("posizione", "-"))],
+      ["Prezzo di noleggio", f"{prodotto.get('costo_noleggio', 0)} €"],
+  ]
+  tabella = Table(dati, colWidths=[150, 350])
+  tabella.setStyle(TableStyle([
+      ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#eaf3ff")),
+      ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#0056b3")),
+      ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+      ("GRID", (0, 0), (-1, -1), .5, colors.HexColor("#b8c7dc")),
+      ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+      ("LEFTPADDING", (0, 0), (-1, -1), 9),
+      ("RIGHTPADDING", (0, 0), (-1, -1), 9),
+      ("TOPPADDING", (0, 0), (-1, -1), 8),
+      ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+  ]))
+  story.append(tabella)
+  story.append(Paragraph("Scheda tecnica", sezione))
+  scheda = str(prodotto.get("scheda_tecnica") or "Nessuna scheda tecnica inserita.")
+  story.append(Paragraph(scheda.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>"), testo))
+  if prodotto.get("note"):
+    story.append(Paragraph("Note", sezione))
+    note = str(prodotto.get("note")).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
+    story.append(Paragraph(note, testo))
+  doc.build(story)
+  return buffer.getvalue()
+
+
+@str_lit.dialog("📄 Scheda Prodotto", width="large")
+def mostra_scheda_prodotto(indice):
+  prodotti = str_lit.session_state.get("prodotti_noleggio", [])
+  if indice is None or indice < 0 or indice >= len(prodotti):
+    str_lit.error("Prodotto non trovato.")
+    return
+  prodotto = prodotti[indice]
+  str_lit.markdown(f"## {prodotto.get('nome', 'Prodotto')}")
+  str_lit.markdown(f"**Codice:** {prodotto.get('codice', '-')}  |  **Categorie:** {prodotto.get('categoria', '-')}  |  **Quantità:** {prodotto.get('quantita', 0)}")
+  str_lit.markdown("### Scheda tecnica")
+  str_lit.info(prodotto.get("scheda_tecnica") or "Nessuna scheda tecnica inserita.")
+  pdf = genera_pdf_scheda_prodotto(prodotto)
+  str_lit.download_button("⬇️ Scarica scheda prodotto in PDF", data=pdf, file_name=f"Scheda_{prodotto.get('codice') or prodotto.get('nome', 'prodotto')}.pdf", mime="application/pdf", type="primary", use_container_width=True)
 
 
 if "utenti_autorizzati" not in str_lit.session_state:
@@ -1594,6 +1656,12 @@ def modale_gestione_prodotto():
           value=float(p_edit.get("costo_noleggio", 0.0)),
           min_value=0.0,
       )
+      f_scheda_tecnica = str_lit.text_area(
+          "📄 Scheda tecnica",
+          value=p_edit.get("scheda_tecnica", ""),
+          height=170,
+          placeholder="Inserisci caratteristiche, misure, materiali, istruzioni o altre informazioni tecniche...",
+      )
 
     f_note = str_lit.text_area("📝 Note (opzionale)", value=p_edit.get("note", ""))
     f_foto = str_lit.file_uploader(
@@ -1616,6 +1684,7 @@ def modale_gestione_prodotto():
           "posizione": f_pos,
           "costo_noleggio": f_prezzo,
           "note": f_note,
+          "scheda_tecnica": f_scheda_tecnica,
           "foto_path": percorso_foto_finale,
       }
 
@@ -2345,21 +2414,16 @@ else:
                 str_lit.markdown("<div class='prodotto-griglia-nota'></div>", unsafe_allow_html=True)
 
               if is_admin:
-                col_mod, col_dup, col_del = str_lit.columns(3)
+                col_mod, col_scheda, col_del = str_lit.columns(3)
                 with col_mod:
                   if str_lit.button("✏️", key=f"edit_{idx}", help="Modifica", use_container_width=True):
                     str_lit.session_state.modale_prodotto = "modifica"
                     str_lit.session_state.prodotto_in_modifica = p
                     str_lit.session_state.indice_modifica = idx
                     modale_gestione_prodotto()
-                with col_dup:
-                  if str_lit.button("📄", key=f"dup_{idx}", help="Duplica", use_container_width=True):
-                    nuovo_p = p.copy()
-                    nuovo_p["codice"] = p.get("codice", "") + "-COPIA"
-                    nuovo_p.pop("id", None)
-                    str_lit.session_state.prodotti_noleggio.append(nuovo_p)
-                    salva_dati_esterni()
-                    str_lit.rerun()
+                with col_scheda:
+                  if str_lit.button("Scheda", key=f"scheda_prodotto_{idx}", help="Apri scheda prodotto", use_container_width=True):
+                    mostra_scheda_prodotto(idx)
                 with col_del:
                   with str_lit.popover("🗑️", help="Elimina"):
                     str_lit.warning("Eliminazione definitiva")
