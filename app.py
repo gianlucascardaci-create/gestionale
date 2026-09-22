@@ -961,7 +961,7 @@ def genera_pdf_scheda_prodotto(prodotto):
   pdf.line(62, 695, 738, 695)
 
   nome = str(prodotto.get("nome", "Prodotto"))
-  pdf.setFillColor(testo)
+  pdf.setFillColor(blu)
   pdf.setFont("Helvetica-Bold", 31 if len(nome) < 28 else 25)
   pdf.drawString(62, 620, nome[:50])
   pdf.setFillColor(secondario)
