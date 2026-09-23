@@ -314,24 +314,7 @@ def categorie_prodotto(valore):
   if not valore:
     return []
   return [parte.strip() for parte in str(valore).split(",") if parte.strip()]
-
-
-def dati_scheda_tecnica(valore):
-  """Legge la scheda nuova a campi e mantiene compatibilità con il vecchio testo libero."""
-  campi_vuoti = {"materiale": "", "colore": "", "dimensione": "", "note": ""}
-  if isinstance(valore, dict):
-    return {chiave: str(valore.get(chiave) or "") for chiave in campi_vuoti}
-  testo = str(valore or "")
-  if testo:
-    try:
-      decodificato = json.loads(testo)
-      if isinstance(decodificato, dict):
-        return {chiave: str(decodificato.get(chiave) or "") for chiave in campi_vuoti}
-    except (TypeError, ValueError, json.JSONDecodeError):
-      campi_vuoti["note"] = testo
-  return campi_vuoti
-
-
+  
 def testo_categorie(valore):
   categorie = categorie_prodotto(valore)
   return ", ".join(categorie) if categorie else "N/D"
