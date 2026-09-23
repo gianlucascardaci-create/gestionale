@@ -25,6 +25,7 @@ try:
   from reportlab.lib.pagesizes import letter
   from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
   from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle, Image as ReportLabImage
+  from reportlab.pdfgen.canvas import Canvas as ReportLabCanvas
   REPORTLAB_DISPONIBILE = True
 except ImportError:
   REPORTLAB_DISPONIBILE = False
@@ -315,6 +316,22 @@ def categorie_prodotto(valore):
   return [parte.strip() for parte in str(valore).split(",") if parte.strip()]
 
 
+def dati_scheda_tecnica(valore):
+  """Legge la scheda nuova a campi e mantiene compatibilità con il vecchio testo libero."""
+  campi_vuoti = {"materiale": "", "colore": "", "dimensione": "", "note": ""}
+  if isinstance(valore, dict):
+    return {chiave: str(valore.get(chiave) or "") for chiave in campi_vuoti}
+  testo = str(valore or "")
+  if testo:
+    try:
+      decodificato = json.loads(testo)
+      if isinstance(decodificato, dict):
+        return {chiave: str(decodificato.get(chiave) or "") for chiave in campi_vuoti}
+    except (TypeError, ValueError, json.JSONDecodeError):
+      campi_vuoti["note"] = testo
+  return campi_vuoti
+
+
 def testo_categorie(valore):
   categorie = categorie_prodotto(valore)
   return ", ".join(categorie) if categorie else "N/D"
@@ -453,10 +470,26 @@ def carica_dati_esterni():
   try:
     # Vengono richiesti solo i campi necessari; gli allegati restano nel DB
     # ma non vengono caricati nella pagina del magazzino.
-    res_prod = supabase.table("prodotti_noleggio").select(
-        "id,codice,nome,categoria,quantita,posizione,costo_noleggio,note,foto_path"
-    ).order("nome").execute()
+    try:
+      res_prod = supabase.table("prodotti_noleggio").select(
+          "id,codice,nome,categoria,quantita,posizione,costo_noleggio,note,foto_path,scheda_tecnica,scheda_materiale,scheda_colore,scheda_dimensione,scheda_note"
+      ).order("nome").execute()
+    except Exception:
+      # Compatibilità temporanea con Supabase prima dell'esecuzione della migrazione SQL.
+      res_prod = supabase.table("prodotti_noleggio").select(
+          "id,codice,nome,categoria,quantita,posizione,costo_noleggio,note,foto_path"
+      ).order("nome").execute()
     prodotti = res_prod.data or []
+    for prodotto in prodotti:
+      scheda_precedente = dati_scheda_tecnica(prodotto.get("scheda_tecnica"))
+      campi_db = {
+          "materiale": prodotto.get("scheda_materiale"),
+          "colore": prodotto.get("scheda_colore"),
+          "dimensione": prodotto.get("scheda_dimensione"),
+          "note": prodotto.get("scheda_note"),
+      }
+      scheda = campi_db if any(valore not in (None, "") for valore in campi_db.values()) else scheda_precedente
+      prodotto["scheda_tecnica"] = json.dumps(scheda, ensure_ascii=False)
     try:
       res_nol = supabase.table("noleggi").select("*").order("inizio").execute()
       noleggi = [normalizza_noleggio_db(r) for r in (res_nol.data or [])]
@@ -508,9 +541,16 @@ def salva_dati_esterni():
     # Gli aggiornamenti usano l'id del database. Non vengono eseguite
     # SELECT aggiuntive per ogni prodotto.
     for p in str_lit.session_state.prodotti_noleggio:
+      scheda = dati_scheda_tecnica(p.get("scheda_tecnica"))
       payload = {k: p.get(k) for k in (
           "codice", "nome", "categoria", "quantita", "posizione",
-          "costo_noleggio", "note", "foto_path")}
+          "costo_noleggio", "note", "foto_path", "scheda_tecnica")}
+      payload.update({
+          "scheda_materiale": scheda["materiale"],
+          "scheda_colore": scheda["colore"],
+          "scheda_dimensione": scheda["dimensione"],
+          "scheda_note": scheda["note"],
+      })
       payload = {k: v for k, v in payload.items() if v is not None}
       if p.get("id"):
         res = supabase.table("prodotti_noleggio").update(payload).eq("id", p["id"]).execute()
@@ -888,6 +928,121 @@ def genera_pdf_lista_attrezzature(nome_evento, lista_prodotti):
 
   doc.build(story)
   return buffer.getvalue()
+
+
+def genera_pdf_scheda_prodotto(prodotto):
+  """Genera una scheda tecnica quadrata 800x800 pt, minimal e professionale."""
+  buffer = BytesIO()
+  pagina = 800
+  pdf = ReportLabCanvas(buffer, pagesize=(pagina, pagina))
+  blu = colors.HexColor("#083278")
+  blu_chiaro = colors.HexColor("#edf4fc")
+  fondo = colors.HexColor("#fffdfa")
+  testo = colors.HexColor("#25364a")
+  secondario = colors.HexColor("#6d7885")
+  bordo = colors.HexColor("#d9e2ec")
+
+  pdf.setFillColor(fondo)
+  pdf.rect(0, 0, pagina, pagina, fill=1, stroke=0)
+  pdf.setStrokeColor(bordo)
+  pdf.setLineWidth(.8)
+  pdf.roundRect(34, 34, pagina - 68, pagina - 68, 18, fill=0, stroke=1)
+
+  # Intestazione sottile e orizzontale.
+  pdf.setFillColor(blu)
+  pdf.roundRect(62, 704, 8, 42, 4, fill=1, stroke=0)
+  pdf.setFont("Helvetica-Bold", 11)
+  pdf.drawString(84, 728, "SCHEDA TECNICA · NOLEGGIO")
+  pdf.setFillColor(secondario)
+  pdf.setFont("Helvetica", 9)
+  pdf.drawRightString(738, 728, "Ergo Noleggi")
+  pdf.setStrokeColor(colors.HexColor("#cbd9e8"))
+  pdf.line(62, 695, 738, 695)
+
+  nome = str(prodotto.get("nome", "Prodotto"))
+  pdf.setFillColor(blu)
+  pdf.setFont("Helvetica-Bold", 31 if len(nome) < 28 else 25)
+  pdf.drawString(62, 620, nome[:50])
+  pdf.setFillColor(secondario)
+  pdf.setFont("Helvetica", 11)
+  pdf.drawString(62, 590, "Informazioni tecniche del prodotto")
+
+  scheda = dati_scheda_tecnica(prodotto.get("scheda_tecnica"))
+
+  def card(x, etichetta, valore):
+    pdf.setFillColor(blu_chiaro)
+    pdf.roundRect(x, 438, 212, 106, 14, fill=1, stroke=0)
+    pdf.setFillColor(blu)
+    pdf.circle(x + 21, 514, 4, fill=1, stroke=0)
+    pdf.setFont("Helvetica-Bold", 9)
+    pdf.drawString(x + 34, 510, etichetta.upper())
+    pdf.setFillColor(testo)
+    pdf.setFont("Helvetica-Bold", 13)
+    valore_testo = str(valore).strip() or "Non specificato"
+    pdf.drawString(x + 20, 474, valore_testo[:25])
+
+  card(62, "Materiale", scheda.get("materiale", ""))
+  card(294, "Colore", scheda.get("colore", ""))
+  card(526, "Dimensione", scheda.get("dimensione", ""))
+
+  pdf.setFillColor(blu)
+  pdf.setFont("Helvetica-Bold", 11)
+  pdf.drawString(62, 392, "NOTE TECNICHE")
+  pdf.setFillColor(secondario)
+  pdf.setFont("Helvetica", 9)
+  pdf.drawRightString(738, 392, "Dettagli utili per il noleggio")
+  pdf.setFillColor(blu_chiaro)
+  pdf.roundRect(62, 150, pagina - 124, 216, 14, fill=1, stroke=0)
+  pdf.setStrokeColor(colors.HexColor("#eadfce"))
+  pdf.roundRect(62, 150, pagina - 124, 216, 14, fill=0, stroke=1)
+
+  note = str(scheda.get("note", "")).strip() or "Nessuna nota tecnica inserita."
+  pdf.setFillColor(testo)
+  pdf.setFont("Helvetica", 12)
+  righe = []
+  for paragrafo in note.splitlines() or [note]:
+    parole = paragrafo.split()
+    riga = ""
+    for parola in parole:
+      candidata = f"{riga} {parola}".strip()
+      if pdf.stringWidth(candidata, "Helvetica", 12) > 630:
+        righe.append(riga)
+        riga = parola
+      else:
+        riga = candidata
+    righe.append(riga)
+  y = 324
+  for riga in righe[:9]:
+    pdf.drawString(86, y, riga)
+    y -= 21
+
+  pdf.setFillColor(secondario)
+  pdf.setFont("Helvetica", 8)
+  pdf.drawString(62, 78, "Scheda tecnica prodotto")
+  pdf.save()
+  return buffer.getvalue()
+
+
+@str_lit.dialog("📄 Scheda Prodotto", width="large")
+def mostra_scheda_prodotto(indice):
+  prodotti = str_lit.session_state.get("prodotti_noleggio", [])
+  if indice is None or indice < 0 or indice >= len(prodotti):
+    str_lit.error("Prodotto non trovato.")
+    return
+  prodotto = prodotti[indice]
+  str_lit.markdown(f"## {prodotto.get('nome', 'Prodotto')}")
+  str_lit.markdown("### Scheda tecnica")
+  scheda = dati_scheda_tecnica(prodotto.get("scheda_tecnica"))
+  for etichetta, chiave in (("Materiale", "materiale"), ("Colore", "colore"), ("Dimensione", "dimensione"), ("Note", "note")):
+    valore = scheda.get(chiave, "").strip()
+    if valore:
+      str_lit.markdown(f"**{etichetta}:**")
+      str_lit.info(valore)
+  if not any(scheda.values()):
+    str_lit.info("Nessuna informazione tecnica inserita.")
+  pdf = genera_pdf_scheda_prodotto(prodotto)
+  nome_file_pdf = re.sub(r"[^\w\s-]", "", str(prodotto.get("nome") or "prodotto"), flags=re.UNICODE).strip().replace(" ", "_") or "prodotto"
+  str_lit.download_button("⬇️ Scarica scheda prodotto in PDF", data=pdf, file_name=f"Scheda_{nome_file_pdf}.pdf", mime="application/pdf", type="primary", use_container_width=True)
 
 
 if "utenti_autorizzati" not in str_lit.session_state:
@@ -1537,6 +1692,9 @@ def modale_gestione_prodotto():
       if MODO == "modifica"
       else "🆕 Aggiungi Nuovo Prodotto"
   )
+  ruolo_prodotto = (str_lit.session_state.get("utente_loggato") or {}).get("ruolo", "")
+  puo_modificare_scheda = ruolo_prodotto == "Amministratore"
+  scheda_corrente = dati_scheda_tecnica(p_edit.get("scheda_tecnica"))
   str_lit.markdown(f"#### {testo_titolo_prodotto}")
 
   if MODO == "modifica" and p_edit.get("codice"):
@@ -1563,13 +1721,11 @@ def modale_gestione_prodotto():
       f_nome = str_lit.text_input("🏷️ Nome Prodotto", value=p_edit.get("nome", ""))
       f_codice = str_lit.text_input("🆔 Codice Identificativo", value=p_edit.get("codice", ""))
 
-      cat_correnti = categorie_prodotto(p_edit.get("categoria", "TAVOLI"))
+      cat_correnti = categorie_prodotto(p_edit.get("categoria", ""))
       cat_default = [cat for cat in cat_correnti if cat in CATEGORIE_PRODOTTI]
-      if not cat_default:
-        cat_default = [CATEGORIE_PRODOTTI[0]]
-      str_lit.markdown("**📂 Categorie (puoi sceglierne più di una)**")
+      str_lit.markdown("**📂 Categorie (seleziona almeno una categoria)**")
       f_categorie = []
-      cat_key_suffix = str(p_edit.get("id") or p_edit.get("codice") or "nuovo")
+      cat_key_suffix = str(p_edit.get("id") or p_edit.get("codice") or str_lit.session_state.get("nuovo_prodotto_key", "nuovo"))
       for cat_start in range(0, len(CATEGORIE_PRODOTTI), 3):
         cat_cols = str_lit.columns(3)
         for cat_pos, cat_nome in enumerate(CATEGORIE_PRODOTTI[cat_start:cat_start + 3]):
@@ -1594,6 +1750,11 @@ def modale_gestione_prodotto():
           value=float(p_edit.get("costo_noleggio", 0.0)),
           min_value=0.0,
       )
+      str_lit.markdown("**📄 Scheda tecnica**")
+      f_materiale = str_lit.text_input("Materiale", value=scheda_corrente["materiale"], disabled=not puo_modificare_scheda)
+      f_colore = str_lit.text_input("Colore", value=scheda_corrente["colore"], disabled=not puo_modificare_scheda)
+      f_dimensione = str_lit.text_input("Dimensione", value=scheda_corrente["dimensione"], disabled=not puo_modificare_scheda)
+      f_note_tecnica = str_lit.text_area("Note", value=scheda_corrente["note"], height=120, disabled=not puo_modificare_scheda)
 
     f_note = str_lit.text_area("📝 Note (opzionale)", value=p_edit.get("note", ""))
     f_foto = str_lit.file_uploader(
@@ -1601,6 +1762,9 @@ def modale_gestione_prodotto():
     )
 
     if str_lit.form_submit_button("💾 Salva Prodotto", type="primary", use_container_width=True):
+      if not f_categorie:
+        str_lit.error("Seleziona almeno una categoria prima di salvare il prodotto.")
+        return
       percorso_foto_finale = (
           salva_immagine_su_disco(f_foto)
           if f_foto
@@ -1611,11 +1775,17 @@ def modale_gestione_prodotto():
           "id": p_edit.get("id"),
           "codice": f_codice.strip(),
           "nome": f_nome,
-          "categoria": ", ".join(f_categorie) if f_categorie else CATEGORIE_PRODOTTI[0],
+          "categoria": ", ".join(f_categorie),
           "quantita": f_qta,
           "posizione": f_pos,
           "costo_noleggio": f_prezzo,
           "note": f_note,
+          "scheda_tecnica": json.dumps({
+              "materiale": f_materiale.strip(),
+              "colore": f_colore.strip(),
+              "dimensione": f_dimensione.strip(),
+              "note": f_note_tecnica.strip(),
+          }, ensure_ascii=False),
           "foto_path": percorso_foto_finale,
       }
 
@@ -2260,6 +2430,7 @@ else:
           ):
             str_lit.session_state.modale_prodotto = "nuovo"
             str_lit.session_state.prodotto_in_modifica = {}
+            str_lit.session_state.nuovo_prodotto_key = str(uuid.uuid4())
             modale_gestione_prodotto()
 
       with col_cat_filtro:
@@ -2345,21 +2516,16 @@ else:
                 str_lit.markdown("<div class='prodotto-griglia-nota'></div>", unsafe_allow_html=True)
 
               if is_admin:
-                col_mod, col_dup, col_del = str_lit.columns(3)
+                col_mod, col_scheda, col_del = str_lit.columns(3)
                 with col_mod:
                   if str_lit.button("✏️", key=f"edit_{idx}", help="Modifica", use_container_width=True):
                     str_lit.session_state.modale_prodotto = "modifica"
                     str_lit.session_state.prodotto_in_modifica = p
                     str_lit.session_state.indice_modifica = idx
                     modale_gestione_prodotto()
-                with col_dup:
-                  if str_lit.button("📄", key=f"dup_{idx}", help="Duplica", use_container_width=True):
-                    nuovo_p = p.copy()
-                    nuovo_p["codice"] = p.get("codice", "") + "-COPIA"
-                    nuovo_p.pop("id", None)
-                    str_lit.session_state.prodotti_noleggio.append(nuovo_p)
-                    salva_dati_esterni()
-                    str_lit.rerun()
+                with col_scheda:
+                  if str_lit.button("Scheda", key=f"scheda_prodotto_{idx}", help="Apri scheda prodotto", use_container_width=True):
+                    mostra_scheda_prodotto(idx)
                 with col_del:
                   with str_lit.popover("🗑️", help="Elimina"):
                     str_lit.warning("Eliminazione definitiva")
@@ -2377,6 +2543,9 @@ else:
                       str_lit.session_state.prodotti_noleggio.pop(idx)
                       salva_dati_esterni()
                       str_lit.rerun()
+              else:
+                if str_lit.button("Scheda", key=f"scheda_prodotto_{idx}", help="Apri scheda prodotto", use_container_width=True):
+                  mostra_scheda_prodotto(idx)
 
 
     elif str_lit.session_state.area_selezionata == "opzione_2":
