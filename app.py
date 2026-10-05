@@ -1430,8 +1430,12 @@ def modale_modifica_noleggio_demo(noleggio_id):
   noleggio = carica_allegati_noleggio_su_richiesta(noleggio)
   utente_corrente = str_lit.session_state.get("utente_loggato") or {}
   ruolo_corrente = utente_corrente.get("ruolo", "")
+  calendario_corrente = str_lit.session_state.get("tipo_calendario", "noleggi")
   is_magazzino1 = ruolo_corrente in {"Magazzino", "Magazzino1", "Magazzino 1"}
-  puo_modificare = ruolo_corrente in {"Amministratore", "Wedding", "Magazzino2"}
+  puo_modificare = (
+      (ruolo_corrente == "Amministratore" and calendario_corrente == "noleggi")
+      or ruolo_corrente == "Magazzino2"
+  )
   if not puo_modificare:
     str_lit.info("Modalità sola visualizzazione.")
   if is_magazzino1:
@@ -1639,12 +1643,13 @@ def modale_catering_da_calendario(evento):
   }
   for sezione in sezioni_visibili.get(ruolo, []):
     mostra_note_calendario(*sezione)
-  if ruolo in {"Amministratore", "Wedding"} and indice_evento is not None:
+  puo_modificare_evento = ruolo in {"Amministratore", "Wedding"} and str_lit.session_state.get("tipo_calendario", "catering") == "catering"
+  if puo_modificare_evento and indice_evento is not None:
     if str_lit.button("Modifica evento", type="primary", use_container_width=True, key=f"modifica_calendario_catering_{indice_evento}"):
       str_lit.session_state.evento_catering_demo_selezionato = None
       str_lit.session_state.indice_evento_catering_da_modificare = indice_evento
       str_lit.rerun()
-  if ruolo in {"Amministratore", "Wedding"}:
+  if puo_modificare_evento:
     with str_lit.popover("Elimina evento"):
       str_lit.warning("L'eliminazione è definitiva.")
       if str_lit.button("Conferma eliminazione evento", key=f"elimina_catering_cal_{evento.get('id', evento.get('nome_evento', 'evento'))}", type="primary", use_container_width=True):
