@@ -1668,7 +1668,9 @@ def mostra_noleggi_demo():
   ruolo = (str_lit.session_state.get("utente_loggato") or {}).get("ruolo", "")
   tipo = str_lit.session_state.get("tipo_calendario", "noleggi")
   solo_catering = (tipo == "catering" and ruolo != "Amministratore") or ruolo in {"Sala", "Cucina", "Wedding"}
-  if solo_catering:
+  # Un modulo noleggio abbandonato non deve riapparire entrando nel
+  # Calendario Eventi, nemmeno per l'Amministratore.
+  if tipo == "catering" or solo_catering:
     str_lit.session_state.noleggio_demo_modifica = None
     str_lit.session_state.noleggio_demo_crea_data = None
     str_lit.session_state.noleggio_demo_eliminazione_in_attesa = None
