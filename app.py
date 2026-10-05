@@ -44,6 +44,7 @@ except Exception:
     str_lit.error("Configurare SUPABASE_URL e SUPABASE_KEY nei Secrets di Streamlit.")
     str_lit.stop()
 BUCKET_IMMAGINI = "immagini_prodotti"
+BUCKET_ALLEGATI_NOLEGGI = "allegati_noleggi"
 
 @str_lit.cache_resource
 def init_supabase() -> Client:
@@ -287,6 +288,31 @@ str_lit.markdown(
             line-height: 1.15 !important;
         }
     }
+    /* Dashboard Magazzino 1/2: due card sempre affiancate e della stessa altezza. */
+    [data-testid="stHorizontalBlock"]:has(.dashboard-magazzino) {
+        flex-wrap: nowrap !important;
+        align-items: stretch !important;
+    }
+    [data-testid="stHorizontalBlock"]:has(.dashboard-magazzino) > [data-testid="stColumn"] {
+        flex: 0 0 calc(50% - .5rem) !important;
+        min-width: 0 !important;
+        width: auto !important;
+        max-width: none !important;
+    }
+    [data-testid="stHorizontalBlock"]:has(.dashboard-magazzino) [data-testid="stVerticalBlockBorderWrapper"] {
+        height: 420px !important;
+        min-height: 420px !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+    [data-testid="stHorizontalBlock"]:has(.dashboard-magazzino) [data-testid="stVerticalBlockBorderWrapper"] > div {
+        height: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+    [data-testid="stHorizontalBlock"]:has(.dashboard-magazzino) [data-testid="stButton"] {
+        margin-top: auto !important;
+    }
 </style>
 """,
     unsafe_allow_html=True,
@@ -295,6 +321,7 @@ str_lit.markdown(
 CATEGORIE_PRODOTTI = [
     "TAVOLI",
     "SEDIE",
+    "CALTAGIRONE",
     "PIATTI E SOTTOPIATTI",
     "BICCHIERI",
     "CUCINA",
@@ -335,6 +362,12 @@ def dati_scheda_tecnica(valore):
 def testo_categorie(valore):
   categorie = categorie_prodotto(valore)
   return ", ".join(categorie) if categorie else "N/D"
+
+
+def reset_categoria_catalogo_al_cambio_nome():
+  """Quando si avvia una ricerca testuale, rimuove il filtro categoria precedente."""
+  if str_lit.session_state.get("search_cat_lista", "").strip():
+    str_lit.session_state["filtro_cat_catalogo"] = "Tutte le categorie"
 
 
 def normalizza_testo_ricerca(valore):
@@ -438,7 +471,8 @@ def normalizza_noleggio_db(riga):
 
 def payload_noleggio(noleggio):
   campi = ("titolo", "inizio", "fine", "stato", "location", "referente", "telefono", "note",
-           "bolla", "ddt", "vario", "bolla_dati_b64", "ddt_dati_b64", "vario_dati_b64",
+           "bolla", "ddt", "vario", "bolla_url", "ddt_url", "vario_url",
+           "bolla_dati_b64", "ddt_dati_b64", "vario_dati_b64",
            "bolla_mime", "ddt_mime", "vario_mime")
   payload = {k: noleggio.get(k) for k in campi if noleggio.get(k) is not None}
   for campo in ("inizio", "fine"):
@@ -450,9 +484,9 @@ def payload_noleggio(noleggio):
 def salva_noleggio_supabase(noleggio):
   payload = payload_noleggio(noleggio)
   if noleggio.get("id"):
-    res = supabase.table("noleggi").update(payload).eq("id", noleggio["id"]).select("*").execute()
+    res = supabase.table("noleggi").update(payload).eq("id", noleggio["id"]).select("id,titolo,inizio,fine,stato,location,referente,telefono,note,bolla,ddt,vario,bolla_url,ddt_url,vario_url,bolla_mime,ddt_mime,vario_mime").execute()
   else:
-    res = supabase.table("noleggi").insert(payload).select("*").execute()
+    res = supabase.table("noleggi").insert(payload).select("id,titolo,inizio,fine,stato,location,referente,telefono,note,bolla,ddt,vario,bolla_url,ddt_url,vario_url,bolla_mime,ddt_mime,vario_mime").execute()
   dati_risposta = res.data or []
   if isinstance(dati_risposta, dict):
     dati_risposta = [dati_risposta]
@@ -461,18 +495,94 @@ def salva_noleggio_supabase(noleggio):
   return bool(res.data)
 
 
+def salva_prodotto_singolo(prodotto):
+  """Aggiorna solo il prodotto modificato, evitando riscritture dell'intero catalogo."""
+  scheda = dati_scheda_tecnica(prodotto.get("scheda_tecnica"))
+  payload = {k: prodotto.get(k) for k in (
+      "codice", "nome", "categoria", "quantita", "posizione", "costo_noleggio",
+      "note", "foto_path", "scheda_tecnica") if prodotto.get(k) is not None}
+  payload.update({
+      "scheda_materiale": scheda["materiale"],
+      "scheda_colore": scheda["colore"],
+      "scheda_dimensione": scheda["dimensione"],
+      "scheda_note": scheda["note"],
+  })
+  if prodotto.get("id"):
+    risposta = supabase.table("prodotti_noleggio").update(payload).eq("id", prodotto["id"]).execute()
+  else:
+    risposta = supabase.table("prodotti_noleggio").insert(payload).execute()
+    if risposta.data:
+      prodotto["id"] = risposta.data[0].get("id")
+  return bool(risposta.data)
+
+
+def salva_utente_singolo(username, dati):
+  payload = {"username": username, "password": dati.get("password"), "ruolo": dati.get("ruolo"), "nome": dati.get("nome"), "email": dati.get("email")}
+  esistente = supabase.table("utenti_autorizzati").select("id").eq("username", username).limit(1).execute()
+  if esistente.data:
+    return bool(supabase.table("utenti_autorizzati").update(payload).eq("username", username).execute().data)
+  return bool(supabase.table("utenti_autorizzati").insert(payload).execute().data)
+
+
+def carica_prodotto_completo_su_richiesta(prodotto):
+  """Carica i campi tecnici solo aprendo Modifica o Scheda prodotto."""
+  if not prodotto or not prodotto.get("id"):
+    return prodotto
+  try:
+    risposta = supabase.table("prodotti_noleggio").select(
+        "id,codice,nome,categoria,quantita,posizione,costo_noleggio,note,foto_path,scheda_tecnica,scheda_materiale,scheda_colore,scheda_dimensione,scheda_note"
+    ).eq("id", prodotto["id"]).limit(1).execute()
+    if risposta.data:
+      prodotto.update(risposta.data[0])
+      campi = {"materiale": prodotto.get("scheda_materiale"), "colore": prodotto.get("scheda_colore"), "dimensione": prodotto.get("scheda_dimensione"), "note": prodotto.get("scheda_note")}
+      prodotto["scheda_tecnica"] = json.dumps(campi if any(v not in (None, "") for v in campi.values()) else dati_scheda_tecnica(prodotto.get("scheda_tecnica")), ensure_ascii=False)
+  except Exception:
+    pass
+  return prodotto
+
+
+def carica_allegati_noleggio_su_richiesta(noleggio):
+  """Carica i dati pesanti solo quando si apre il dettaglio del noleggio."""
+  if not noleggio or not noleggio.get("id"):
+    return noleggio
+  try:
+    risposta = supabase.table("noleggi").select(
+        "id,bolla_dati_b64,ddt_dati_b64,vario_dati_b64,bolla_url,ddt_url,vario_url,bolla_mime,ddt_mime,vario_mime"
+    ).eq("id", noleggio["id"]).limit(1).execute()
+    if risposta.data:
+      noleggio.update(risposta.data[0])
+      aggiornamento = {}
+      for campo in ("bolla", "ddt", "vario"):
+        dati_legacy = noleggio.get(f"{campo}_dati_b64") or ""
+        if dati_legacy and not noleggio.get(f"{campo}_url"):
+          url = salva_bytes_allegato_su_storage(
+              base64.b64decode(dati_legacy),
+              noleggio.get(campo) or f"{campo}.bin",
+              noleggio.get(f"{campo}_mime") or "application/octet-stream",
+          )
+          aggiornamento[f"{campo}_url"] = url
+          aggiornamento[f"{campo}_dati_b64"] = None
+          noleggio[f"{campo}_url"] = url
+          noleggio[f"{campo}_dati_b64"] = ""
+      if aggiornamento:
+        supabase.table("noleggi").update(aggiornamento).eq("id", noleggio["id"]).execute()
+  except Exception:
+    pass
+  return noleggio
+
+
 def elimina_noleggio_supabase(noleggio_id):
   return bool(supabase.table("noleggi").delete().eq("id", noleggio_id).execute().data)
 
 
-@str_lit.cache_data(ttl=30, show_spinner=False)
+@str_lit.cache_data(ttl=300, show_spinner=False)
 def carica_dati_esterni():
   try:
     # Vengono richiesti solo i campi necessari; gli allegati restano nel DB
     # ma non vengono caricati nella pagina del magazzino.
     try:
       res_prod = supabase.table("prodotti_noleggio").select(
-          "id,codice,nome,categoria,quantita,posizione,costo_noleggio,note,foto_path,scheda_tecnica,scheda_materiale,scheda_colore,scheda_dimensione,scheda_note"
+          "id,codice,nome,categoria,quantita,posizione,costo_noleggio,note,foto_path"
       ).order("nome").execute()
     except Exception:
       # Compatibilità temporanea con Supabase prima dell'esecuzione della migrazione SQL.
@@ -491,7 +601,15 @@ def carica_dati_esterni():
       scheda = campi_db if any(valore not in (None, "") for valore in campi_db.values()) else scheda_precedente
       prodotto["scheda_tecnica"] = json.dumps(scheda, ensure_ascii=False)
     try:
-      res_nol = supabase.table("noleggi").select("*").order("inizio").execute()
+      try:
+        res_nol = supabase.table("noleggi").select(
+            "id,titolo,inizio,fine,stato,location,referente,telefono,note,bolla,ddt,vario,bolla_url,ddt_url,vario_url,bolla_mime,ddt_mime,vario_mime"
+        ).order("inizio").execute()
+      except Exception:
+        # Compatibilità con la tabella precedente alla migrazione Storage.
+        res_nol = supabase.table("noleggi").select(
+            "id,titolo,inizio,fine,stato,location,referente,telefono,note,bolla,ddt,vario,bolla_mime,ddt_mime,vario_mime"
+        ).order("inizio").execute()
       noleggi = [normalizza_noleggio_db(r) for r in (res_nol.data or [])]
     except Exception as errore_noleggi:
       str_lit.error(f"Errore caricamento tabella noleggi da Supabase: {errore_noleggi}")
@@ -530,7 +648,10 @@ def carica_dati_esterni():
 def carica_eventi_solo_quando_servono():
   """Carica gli eventi solo quando viene aperta una sezione che li usa."""
   try:
-    return supabase.table("eventi_catering").select("*").order("data").execute().data or []
+    eventi = supabase.table("eventi_catering").select(
+        "id,nome_evento,data,data_display,location,ospiti,bambini,staff,note_tutti,allegati_tutti,note_sala,allegati_sala,note_cucina,allegati_cucina,note_magazzino,allegati_magazzino"
+    ).order("data").execute().data or []
+    return [migra_allegati_evento_legacy(evento) for evento in eventi]
   except Exception as e:
     str_lit.error(f"Errore di caricamento eventi da Supabase: {e}")
     return []
@@ -665,7 +786,7 @@ def html_thumb(path, size=110):
       return (
           f"<div style='width:{size}px; height:{size}px; background:#f8f9fa;"
           f" border-radius:8px; overflow:hidden; display:flex; align-items:center;"
-          f" justify-content:center; margin: 0 auto;'><img"
+          f" justify-content:center; margin: 0 auto;'><img loading='lazy'"
           f" src='{path}' style='width:100%; height:100%;"
           " object-fit:cover;'></div>"
       )
@@ -676,7 +797,7 @@ def html_thumb(path, size=110):
         return (
             f"<div style='width:{size}px; height:{size}px; background:#f8f9fa;"
             f" border-radius:8px; overflow:hidden; display:flex;"
-            f" align-items:center; justify-content:center; margin: 0 auto;'><img"
+            f" align-items:center; justify-content:center; margin: 0 auto;'><img loading='lazy'"
             f" src='data:image/jpeg;base64,{b64}' style='width:100%;"
             " height:100%; object-fit:cover;'></div>"
         )
@@ -699,10 +820,10 @@ def salva_immagine_su_disco(uploaded_file):
       # il caricamento. L'originale non viene mai salvato nel database.
       immagine = Image.open(uploaded_file)
       immagine = ImageOps.exif_transpose(immagine).convert("RGB")
-      immagine.thumbnail((2400, 2400), Image.Resampling.LANCZOS)
+      immagine.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
 
       buffer = BytesIO()
-      immagine.save(buffer, format="JPEG", quality=90, optimize=True, progressive=True)
+      immagine.save(buffer, format="JPEG", quality=78, optimize=True, progressive=True)
       file_bytes = buffer.getvalue()
       nome_file_unico = f"{uuid.uuid4()}.jpg"
 
@@ -717,6 +838,84 @@ def salva_immagine_su_disco(uploaded_file):
       str_lit.error(f"Errore caricamento immagine su Supabase Storage: {e}")
       return None
   return None
+
+
+def salva_allegato_noleggio_su_storage(uploaded_file):
+  """Salva l'allegato in Storage: nel database resta solo il riferimento URL."""
+  if uploaded_file is None:
+    return None
+  return salva_bytes_allegato_su_storage(uploaded_file.getvalue(), uploaded_file.name, uploaded_file.type or "application/octet-stream")
+
+
+def salva_bytes_allegato_su_storage(file_bytes, nome_originale, mime):
+  nome_storage = f"{uuid.uuid4()}_{re.sub(r'[^A-Za-z0-9._-]', '_', nome_originale or 'allegato')}"
+  supabase.storage.from_(BUCKET_ALLEGATI_NOLEGGI).upload(
+      path=nome_storage,
+      file=file_bytes,
+      file_options={"content-type": mime, "upsert": "false"},
+  )
+  return supabase.storage.from_(BUCKET_ALLEGATI_NOLEGGI).get_public_url(nome_storage)
+
+
+def dati_allegato_noleggio(noleggio, campo):
+  """Restituisce bytes per il download, usando prima Storage e poi il legacy Base64."""
+  url = noleggio.get(f"{campo}_url") or ""
+  if url:
+    try:
+      risposta = requests.get(url, timeout=15)
+      if risposta.ok:
+        return risposta.content
+    except Exception:
+      pass
+  dati_b64 = noleggio.get(f"{campo}_dati_b64") or ""
+  return base64.b64decode(dati_b64) if dati_b64 else b""
+
+
+def processa_allegati_evento(files):
+  """Memorizza negli eventi solo URL Storage, mai il Base64 del file."""
+  risultato = []
+  for file in files or []:
+    risultato.append({
+        "nome_file": file.name,
+        "url": salva_allegato_noleggio_su_storage(file),
+        "mime": getattr(file, "type", "application/octet-stream"),
+    })
+  return risultato
+
+
+def dati_allegato_evento(allegato):
+  url = allegato.get("url") or ""
+  if url:
+    try:
+      risposta = requests.get(url, timeout=15)
+      if risposta.ok:
+        return risposta.content
+    except Exception:
+      pass
+  dati_b64 = allegato.get("dati_b64") or ""
+  return base64.b64decode(dati_b64) if dati_b64 else b""
+
+
+def migra_allegati_evento_legacy(evento):
+  """Trasferisce una sola volta eventuali allegati evento ancora in Base64."""
+  cambiato = False
+  for campo in ("allegati_tutti", "allegati_sala", "allegati_cucina", "allegati_magazzino"):
+    nuovi = []
+    for allegato in evento.get(campo) or []:
+      if allegato.get("dati_b64") and not allegato.get("url"):
+        allegato = dict(allegato)
+        allegato["url"] = salva_bytes_allegato_su_storage(
+            base64.b64decode(allegato["dati_b64"]),
+            allegato.get("nome_file", "allegato.bin"),
+            allegato.get("mime", "application/octet-stream"),
+        )
+        allegato.pop("dati_b64", None)
+        cambiato = True
+      nuovi.append(allegato)
+    evento[campo] = nuovi
+  if cambiato and evento.get("id"):
+    supabase.table("eventi_catering").update({campo: evento.get(campo) for campo in ("allegati_tutti", "allegati_sala", "allegati_cucina", "allegati_magazzino")}).eq("id", evento["id"]).execute()
+  return evento
 
 
 @str_lit.cache_data
@@ -1030,6 +1229,7 @@ def mostra_scheda_prodotto(indice):
     str_lit.error("Prodotto non trovato.")
     return
   prodotto = prodotti[indice]
+  prodotto = carica_prodotto_completo_su_richiesta(prodotto)
   str_lit.markdown(f"## {prodotto.get('nome', 'Prodotto')}")
   str_lit.markdown("### Scheda tecnica")
   scheda = dati_scheda_tecnica(prodotto.get("scheda_tecnica"))
@@ -1202,9 +1402,9 @@ def modale_crea_noleggio_demo(data_selezionata):
           "fine": datetime.combine(data_fine, ora_fine), "stato": "confermato" if stato == "Confermato" else "non confermato",
           "location": location, "referente": referente, "telefono": telefono, "note": note,
           "bolla": bolla.name if bolla else "Nessun file", "ddt": ddt.name if ddt else "Nessun file", "vario": vario.name if vario else "Nessun file",
-          "bolla_dati_b64": base64.b64encode(bolla.getvalue()).decode("ascii") if bolla else "",
-          "ddt_dati_b64": base64.b64encode(ddt.getvalue()).decode("ascii") if ddt else "",
-          "vario_dati_b64": base64.b64encode(vario.getvalue()).decode("ascii") if vario else "",
+          "bolla_url": salva_allegato_noleggio_su_storage(bolla) if bolla else "",
+          "ddt_url": salva_allegato_noleggio_su_storage(ddt) if ddt else "",
+          "vario_url": salva_allegato_noleggio_su_storage(vario) if vario else "",
           "bolla_mime": bolla.type if bolla else "application/octet-stream",
           "ddt_mime": ddt.type if ddt else "application/octet-stream",
           "vario_mime": vario.type if vario else "application/octet-stream"}
@@ -1227,6 +1427,7 @@ def modale_modifica_noleggio_demo(noleggio_id):
   if not noleggio:
     str_lit.error("Noleggio non trovato.")
     return
+  noleggio = carica_allegati_noleggio_su_richiesta(noleggio)
   utente_corrente = str_lit.session_state.get("utente_loggato") or {}
   ruolo_corrente = utente_corrente.get("ruolo", "")
   is_magazzino1 = ruolo_corrente in {"Magazzino", "Magazzino1", "Magazzino 1"}
@@ -1259,12 +1460,12 @@ def modale_modifica_noleggio_demo(noleggio_id):
       nome = noleggio.get(campo) or "Nessun file"
       if nome != "Nessun file":
         presenti = True
-        dati = noleggio.get(f"{campo}_dati_b64", "")
+        dati = dati_allegato_noleggio(noleggio, campo)
         mime = noleggio.get(f"{campo}_mime", "application/octet-stream")
         str_lit.markdown(f"**{etichetta}:** `{nome}`")
         str_lit.download_button(
             f"📥 Scarica allegato {etichetta}",
-            data=base64.b64decode(dati) if dati else f"Allegato: {nome}".encode("utf-8"),
+            data=dati if dati else f"Allegato: {nome}".encode("utf-8"),
             file_name=nome,
             mime=mime,
             key=f"magazzino_download_{noleggio_id}_{campo}",
@@ -1354,9 +1555,9 @@ def modale_modifica_noleggio_demo(noleggio_id):
     with str_lit.container(border=True):
       str_lit.markdown(f"**{etichetta_allegato}:** `{nome_allegato}`")
       if nome_allegato != "Nessun file":
-        dati_b64 = noleggio.get(f"{campo_allegato}_dati_b64", "")
+        dati_b64 = dati_allegato_noleggio(noleggio, campo_allegato)
         mime_allegato = noleggio.get(f"{campo_allegato}_mime", "application/octet-stream")
-        dati_download = base64.b64decode(dati_b64) if dati_b64 else f"Allegato demo: {nome_allegato}".encode("utf-8")
+        dati_download = dati_b64 if dati_b64 else f"Allegato demo: {nome_allegato}".encode("utf-8")
         str_lit.download_button("📥 Scarica allegato", data=dati_download, file_name=nome_allegato, mime=mime_allegato, key=f"scarica_demo_{noleggio_id}_{campo_allegato}", use_container_width=True)
 
   if salva:
@@ -1364,11 +1565,13 @@ def modale_modifica_noleggio_demo(noleggio_id):
     for campo_upload, (mantieni, nuovo_file) in allegati_modifica.items():
       if not mantieni:
         noleggio[campo_upload] = "Nessun file"
+        noleggio[f"{campo_upload}_url"] = ""
         noleggio[f"{campo_upload}_dati_b64"] = ""
         noleggio[f"{campo_upload}_mime"] = "application/octet-stream"
       if nuovo_file is not None:
         noleggio[campo_upload] = nuovo_file.name
-        noleggio[f"{campo_upload}_dati_b64"] = base64.b64encode(nuovo_file.getvalue()).decode("ascii")
+        noleggio[f"{campo_upload}_url"] = salva_allegato_noleggio_su_storage(nuovo_file)
+        noleggio[f"{campo_upload}_dati_b64"] = ""
         noleggio[f"{campo_upload}_mime"] = nuovo_file.type or "application/octet-stream"
     try:
       salva_noleggio_supabase(noleggio)
@@ -1407,9 +1610,19 @@ def modale_catering_da_calendario(evento):
       nome_allegato = allegato.get("nome_file", f"allegato_{chiave}_{indice}")
       dati_b64 = allegato.get("dati_b64", "")
       mime_allegato = allegato.get("mime", "application/octet-stream")
+      dati_allegato = b""
+      if allegato.get("url"):
+        try:
+          risposta = requests.get(allegato["url"], timeout=15)
+          if risposta.ok:
+            dati_allegato = risposta.content
+        except Exception:
+          pass
+      if not dati_allegato and dati_b64:
+        dati_allegato = base64.b64decode(dati_b64)
       str_lit.download_button(
           f"📥 Scarica allegato: {nome_allegato}",
-          data=base64.b64decode(dati_b64),
+          data=dati_allegato,
           file_name=nome_allegato,
           mime=mime_allegato,
           key=f"calendario_{chiave}_{evento.get('id', evento.get('nome_evento', 'evento'))}_{indice}",
@@ -1454,15 +1667,15 @@ def mostra_noleggi_demo():
   """Calendario mensile a schede, leggibile e senza pallini o barre sovrapposte."""
   ruolo = (str_lit.session_state.get("utente_loggato") or {}).get("ruolo", "")
   tipo = str_lit.session_state.get("tipo_calendario", "noleggi")
-  solo_catering = tipo == "catering" or ruolo in {"Sala", "Cucina", "Wedding"}
+  solo_catering = (tipo == "catering" and ruolo != "Amministratore") or ruolo in {"Sala", "Cucina", "Wedding"}
   if solo_catering:
     str_lit.session_state.noleggio_demo_modifica = None
     str_lit.session_state.noleggio_demo_crea_data = None
     str_lit.session_state.noleggio_demo_eliminazione_in_attesa = None
     str_lit.session_state.eventi_da_scegliere = []
-  mostra_noleggi = not solo_catering and tipo == "noleggi"
+  mostra_noleggi = (tipo == "noleggi" or ruolo == "Amministratore") and ruolo not in {"Sala", "Cucina", "Wedding"}
   mostra_catering = tipo == "catering" or (tipo == "noleggi" and ruolo in {"Magazzino", "Amministratore"})
-  puo_creare_noleggio = mostra_noleggi and ruolo in {"Amministratore", "Magazzino2"}
+  puo_creare_noleggio = tipo == "noleggi" and ruolo in {"Amministratore", "Magazzino2"}
   puo_creare_catering = tipo == "catering" and ruolo in {"Amministratore", "Wedding"}
 
   if not str_lit.session_state.eventi_caricati:
@@ -1470,7 +1683,8 @@ def mostra_noleggi_demo():
     str_lit.session_state.eventi_caricati = True
 
   mesi = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"]
-  str_lit.markdown(f"<div class='planner-header'><div><div class='planner-kicker'>{'PIANIFICAZIONE EVENTI' if solo_catering else 'PIANIFICAZIONE NOLEGGI'}</div><h1>{'Calendario Eventi' if solo_catering else 'Calendario Noleggi'}</h1></div></div>", unsafe_allow_html=True)
+  titolo_calendario = "Calendario Eventi" if tipo == "catering" else "Calendario Noleggi"
+  str_lit.markdown(f"<div class='planner-header'><div><div class='planner-kicker'>{'PIANIFICAZIONE EVENTI' if tipo == 'catering' else 'PIANIFICAZIONE NOLEGGI'}</div><h1>{titolo_calendario}</h1></div></div>", unsafe_allow_html=True)
   col_mese, col_anno = str_lit.columns([1.4, 1.0])
   with col_mese:
     str_lit.caption("Mese")
@@ -1686,6 +1900,8 @@ def modale_gestione_prodotto():
       if MODO == "modifica"
       else {}
   )
+  if MODO == "modifica":
+    p_edit = carica_prodotto_completo_su_richiesta(p_edit)
 
   testo_titolo_prodotto = (
       "✏️ Modifica Prodotto"
@@ -1796,7 +2012,9 @@ def modale_gestione_prodotto():
       else:
         str_lit.session_state.prodotti_noleggio.append(nuovo_item)
 
-      salva_dati_esterni()
+      if not salva_prodotto_singolo(nuovo_item):
+        str_lit.error("Prodotto non salvato su Supabase.")
+        return
       str_lit.toast(f"✅ Prodotto '{f_nome}' salvato con successo!")
       str_lit.session_state.modale_prodotto = None
       str_lit.session_state.prodotto_in_modifica = None
@@ -1859,15 +2077,7 @@ def modale_crea_evento(data_precompilata=None):
       else:
 
         def process_files(files):
-          res = []
-          if files:
-            for f in files:
-              res.append({
-                  "nome_file": f.name,
-                  "dati_b64": base64.b64encode(f.getvalue()).decode("utf-8"),
-                  "mime": getattr(f, "type", "application/octet-stream"),
-              })
-          return res
+          return processa_allegati_evento(files)
 
         dt_parsed = parse_data_evento(n_data)
         nuovo_ev = {
@@ -2036,7 +2246,7 @@ def modale_modifica_evento(idx_ev):
           for f in nuovi_files:
             risultati.append({
                 "nome_file": f.name,
-                "dati_b64": base64.b64encode(f.getvalue()).decode("utf-8"),
+                "url": salva_allegato_noleggio_su_storage(f),
                 "mime": getattr(f, "type", "application/octet-stream"),
             })
         return risultati
@@ -2321,6 +2531,7 @@ else:
       with c1:
         if is_magazzino or is_magazzino2:
           with str_lit.container(border=True):
+            str_lit.markdown("<span class='dashboard-magazzino'></span>", unsafe_allow_html=True)
             if logo_noleggio_b64:
               str_lit.markdown(
                   f'<div style="height: 100px; display: flex; align-items:'
@@ -2352,6 +2563,7 @@ else:
       with c2:
         if is_magazzino or is_magazzino2:
           with str_lit.container(border=True):
+            str_lit.markdown("<span class='dashboard-magazzino'></span>", unsafe_allow_html=True)
             str_lit.markdown("<div style='height:100px;display:flex;align-items:center;justify-content:center;font-size:3rem;margin-bottom:15px;'>📅</div>", unsafe_allow_html=True)
             titolo_calendario_mag = "Noleggi ed Eventi Confermati" if is_magazzino else "Calendario Noleggi"
             str_lit.markdown(f"### {titolo_calendario_mag}")
@@ -2541,7 +2753,6 @@ else:
                       except:
                         pass
                       str_lit.session_state.prodotti_noleggio.pop(idx)
-                      salva_dati_esterni()
                       str_lit.rerun()
               else:
                 if str_lit.button("Scheda", key=f"scheda_prodotto_{idx}", help="Apri scheda prodotto", use_container_width=True):
@@ -2624,7 +2835,7 @@ else:
                   for att in allegati:
                     str_lit.download_button(
                         f"📥 Scarica allegato: {att['nome_file']}",
-                        data=base64.b64decode(att["dati_b64"]),
+                        data=dati_allegato_evento(att),
                         file_name=att["nome_file"],
                         mime=att.get("mime", "application/octet-stream"),
                         key=f"dl_{prefisso}_{idx_ev}_{att['nome_file']}",
@@ -2655,7 +2866,7 @@ else:
                   for att in ev.get("allegati_cucina"):
                     str_lit.download_button(
                         f"📥 Scarica allegato: {att['nome_file']}",
-                        data=base64.b64decode(att["dati_b64"]),
+                        data=dati_allegato_evento(att),
                         file_name=att["nome_file"],
                         key=f"dl_cucina_c_{idx_ev}_{att['nome_file']}",
                     )
@@ -2666,7 +2877,7 @@ else:
                   for att in ev.get("allegati_sala"):
                     str_lit.download_button(
                         f"📥 Scarica allegato: {att['nome_file']}",
-                        data=base64.b64decode(att["dati_b64"]),
+                        data=dati_allegato_evento(att),
                         file_name=att["nome_file"],
                         key=f"dl_sala_s_{idx_ev}_{att['nome_file']}",
                     )
@@ -2677,7 +2888,7 @@ else:
                   for att in ev.get("allegati_magazzino"):
                     str_lit.download_button(
                         f"📥 Scarica allegato: {att['nome_file']}",
-                        data=base64.b64decode(att["dati_b64"]),
+                        data=dati_allegato_evento(att),
                         file_name=att["nome_file"],
                         mime=att.get("mime", "application/octet-stream"),
                         key=f"dl_mag_{idx_ev}_{att['nome_file']}",
@@ -2721,7 +2932,7 @@ else:
                   "nome": ins_nome.strip() or ins_user_key.strip(),
                   "email": ins_email.strip(),
               }
-              salva_dati_esterni()
+              salva_utente_singolo(ins_user_key.strip(), str_lit.session_state.utenti_autorizzati[ins_user_key.strip()])
               str_lit.toast(f"✅ Utente '{ins_user_key}' creato con successo!")
               str_lit.rerun()
 
@@ -2751,7 +2962,6 @@ else:
                   except:
                     pass
                   del str_lit.session_state.utenti_autorizzati[usr_k]
-                  salva_dati_esterni()
                   str_lit.toast(f"🗑️ Utente '{usr_k}' eliminato.")
                   str_lit.rerun()
               else:
@@ -2782,7 +2992,8 @@ else:
                 "📂 Seleziona Categoria", cat_opzioni, key="filtro_cat_catalogo"
             )
             ricerca_cat = str_lit.text_input(
-                "Cerca per nome o codice", key="search_cat_lista", placeholder="Digita per cercare un prodotto..."
+                "Cerca per nome o codice", key="search_cat_lista", placeholder="Digita per cercare un prodotto...",
+                on_change=reset_categoria_catalogo_al_cambio_nome,
             )
 
           prod_disp = str_lit.session_state.prodotti_noleggio
@@ -2803,7 +3014,9 @@ else:
               nome_item = p_item.get("nome", "")
               codice_item = p_item.get("codice", "")
 
-              match_cat = (cat_selezionata_filtro == "Tutte le categorie") or (cat_selezionata_filtro in categorie_item)
+              # Una ricerca testuale è una nuova intenzione di ricerca: non deve
+              # restare vincolata alla categoria scelta in precedenza.
+              match_cat = bool(t_ricerca) or (cat_selezionata_filtro == "Tutte le categorie") or (cat_selezionata_filtro in categorie_item)
               match_text = ricerca_intelligente(
                   t_ricerca,
                   [nome_item, codice_item, testo_categorie(p_item.get("categoria"))],
