@@ -1670,9 +1670,10 @@ def modale_catering_da_calendario(evento):
 
 def mostra_noleggi_demo():
   """Calendario mensile a schede, leggibile e senza pallini o barre sovrapposte."""
-  ruolo = (str_lit.session_state.get("utente_loggato") or {}).get("ruolo", "")
+  ruolo = str((str_lit.session_state.get("utente_loggato") or {}).get("ruolo", "")).strip()
   tipo = str_lit.session_state.get("tipo_calendario", "noleggi")
-  solo_catering = (tipo == "catering" and ruolo != "Amministratore") or ruolo in {"Sala", "Cucina", "Wedding"}
+  admin_visualizza_tutto = ruolo == "Amministratore"
+  solo_catering = (tipo == "catering" and not admin_visualizza_tutto) or ruolo in {"Sala", "Cucina", "Wedding"}
   # Un modulo noleggio abbandonato non deve riapparire entrando nel
   # Calendario Eventi, nemmeno per l'Amministratore.
   if tipo == "catering" or solo_catering:
@@ -1680,8 +1681,8 @@ def mostra_noleggi_demo():
     str_lit.session_state.noleggio_demo_crea_data = None
     str_lit.session_state.noleggio_demo_eliminazione_in_attesa = None
     str_lit.session_state.eventi_da_scegliere = []
-  mostra_noleggi = (tipo == "noleggi" or ruolo == "Amministratore") and ruolo not in {"Sala", "Cucina", "Wedding"}
-  mostra_catering = tipo == "catering" or (tipo == "noleggi" and ruolo in {"Magazzino", "Amministratore"})
+  mostra_noleggi = admin_visualizza_tutto or (tipo == "noleggi" and ruolo not in {"Sala", "Cucina", "Wedding"})
+  mostra_catering = admin_visualizza_tutto or tipo == "catering" or (tipo == "noleggi" and ruolo == "Magazzino")
   puo_creare_noleggio = tipo == "noleggi" and ruolo in {"Amministratore", "Magazzino2"}
   puo_creare_catering = tipo == "catering" and ruolo in {"Amministratore", "Wedding"}
 
