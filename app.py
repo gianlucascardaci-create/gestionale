@@ -1671,8 +1671,9 @@ def modale_catering_da_calendario(evento):
 def mostra_noleggi_demo():
   """Calendario mensile a schede, leggibile e senza pallini o barre sovrapposte."""
   ruolo = str((str_lit.session_state.get("utente_loggato") or {}).get("ruolo", "")).strip()
+  ruolo_normalizzato = ruolo.casefold()
   tipo = str_lit.session_state.get("tipo_calendario", "noleggi")
-  admin_visualizza_tutto = ruolo == "Amministratore"
+  admin_visualizza_tutto = ruolo_normalizzato in {"amministratore", "admin"}
   solo_catering = (tipo == "catering" and not admin_visualizza_tutto) or ruolo in {"Sala", "Cucina", "Wedding"}
   # Un modulo noleggio abbandonato non deve riapparire entrando nel
   # Calendario Eventi, nemmeno per l'Amministratore.
@@ -1685,6 +1686,22 @@ def mostra_noleggi_demo():
   mostra_catering = admin_visualizza_tutto or tipo == "catering" or (tipo == "noleggi" and ruolo == "Magazzino")
   puo_creare_noleggio = tipo == "noleggi" and ruolo in {"Amministratore", "Magazzino2"}
   puo_creare_catering = tipo == "catering" and ruolo in {"Amministratore", "Wedding"}
+
+  # Se la sessione era stata aperta prima del caricamento dei noleggi,
+  # l'Amministratore li rilegge dal database anche nel Calendario Eventi.
+  if admin_visualizza_tutto and not str_lit.session_state.get("noleggi_demo"):
+    try:
+      try:
+        risposta_noleggi = supabase.table("noleggi").select(
+            "id,titolo,inizio,fine,stato,location,referente,telefono,note,bolla,ddt,vario,bolla_url,ddt_url,vario_url,bolla_mime,ddt_mime,vario_mime"
+        ).order("inizio").execute()
+      except Exception:
+        risposta_noleggi = supabase.table("noleggi").select(
+            "id,titolo,inizio,fine,stato,location,referente,telefono,note,bolla,ddt,vario,bolla_mime,ddt_mime,vario_mime"
+        ).order("inizio").execute()
+      str_lit.session_state.noleggi_demo = [normalizza_noleggio_db(riga) for riga in (risposta_noleggi.data or [])]
+    except Exception:
+      pass
 
   if not str_lit.session_state.eventi_caricati:
     str_lit.session_state.eventi_catering = carica_eventi_solo_quando_servono()
