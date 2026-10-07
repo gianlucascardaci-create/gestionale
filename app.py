@@ -323,6 +323,7 @@ CATEGORIE_PRODOTTI = [
     "TAVOLI",
     "SEDIE",
     "CALTAGIRONE",
+    "COMPLEMENTI VARI",
     "PIATTI E SOTTOPIATTI",
     "BICCHIERI",
     "CUCINA",
@@ -1932,6 +1933,8 @@ if codice_scansionato:
       scheda_tecnica_html = f"<div class='qr-tech-title'>Scheda tecnica</div><div class='qr-tech-grid'>{scheda_tecnica_html}</div>"
     str_lit.markdown(f"""
     <style>
+      #MainMenu, footer, header, [data-testid="stToolbar"], .stAppDeployButton{{display:none !important}}
+      [data-testid="stDecoration"]{{display:none !important}}
       .qr-screen{{max-width:850px;min-height:calc(100vh - 72px);margin:0 auto;display:flex;align-items:center;color:#14213d}}
       .qr-card{{width:100%;display:grid;grid-template-columns:240px 1fr;gap:24px;align-items:center;padding:20px 24px;border:1px solid #e4e7ec;border-radius:18px;background:#fff;box-shadow:0 8px 28px rgba(16,42,67,.08)}}
       .qr-photo{{display:block;width:100%;height:220px;object-fit:contain;border-radius:12px;background:#f8fafc}}
