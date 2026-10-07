@@ -3,6 +3,7 @@ import calendar
 import base64
 from io import BytesIO
 import json
+import html
 import os
 import socket
 import uuid
@@ -577,6 +578,15 @@ def elimina_noleggio_supabase(noleggio_id):
 
 @str_lit.cache_data(ttl=300, show_spinner=False)
 def carica_dati_esterni():
+  # La pagina QR è pubblica e deve essere immediata: non serve caricare
+  # inventario, noleggi e utenti prima di leggere il singolo prodotto.
+  if str(str_lit.query_params.get("codice", "")).strip():
+    return {
+        "prodotti_noleggio": [],
+        "noleggi": [],
+        "eventi_catering": [],
+        "utenti_autorizzati": None,
+    }
   try:
     # Vengono richiesti solo i campi necessari; gli allegati restano nel DB
     # ma non vengono caricati nella pagina del magazzino.
@@ -1883,29 +1893,43 @@ if codice_scansionato:
     str_lit.error(f"Impossibile leggere il prodotto: {e}")
 
   if prodotto_qr:
-    str_lit.markdown("<div style='height:35px'></div>", unsafe_allow_html=True)
-    str_lit.markdown(
-        "<h1 style='text-align:center; color:#0056b3;'>Scheda Prodotto</h1>",
-        unsafe_allow_html=True,
-    )
-    str_lit.markdown(
-        "<p style='text-align:center; color:#555;'>Consultazione pubblica in sola lettura</p>",
-        unsafe_allow_html=True,
-    )
-    col_qr_img, col_qr_info = str_lit.columns([1.15, 2])
+    str_lit.markdown("""
+    <style>
+      .qr-wrap{max-width:900px;margin:18px auto 0;color:#14213d}
+      .qr-title{font-size:1.55rem;font-weight:800;color:#083278;margin:0 0 3px}
+      .qr-subtitle{font-size:.82rem;color:#667085;margin:0 0 18px}
+      .qr-quantity{background:#083278;color:white;border-radius:14px;padding:16px 20px;margin:12px 0 16px}
+      .qr-quantity-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;opacity:.82}
+      .qr-quantity-value{font-size:2.35rem;font-weight:850;line-height:1.05;margin-top:3px}
+      .qr-note{background:#f3f8ff;border:1px solid #d7e7fa;border-radius:12px;padding:14px 16px;margin-top:8px;white-space:pre-wrap;line-height:1.5}
+      .qr-meta{font-size:.82rem;color:#667085;line-height:1.7;margin-top:12px}
+    </style>
+    <div class="qr-wrap">
+      <div class="qr-title">Scheda prodotto</div>
+      <div class="qr-subtitle">Consultazione rapida</div>
+    </div>
+    """, unsafe_allow_html=True)
+    col_qr_img, col_qr_info = str_lit.columns([1, 1.35], gap="large")
     with col_qr_img:
       if prodotto_qr.get("foto_path"):
         str_lit.image(prodotto_qr.get("foto_path"), use_container_width=True)
       else:
-        str_lit.info("Nessuna foto disponibile")
+        str_lit.markdown("<div style='height:120px;display:flex;align-items:center;justify-content:center;background:#f8fafc;border-radius:12px;color:#98a2b3;'>Nessuna foto</div>", unsafe_allow_html=True)
     with col_qr_info:
-      str_lit.subheader(prodotto_qr.get("nome") or "Prodotto")
-      str_lit.markdown(f"**Codice:** {prodotto_qr.get('codice') or '-'}")
-      str_lit.markdown(f"**Categorie:** {testo_categorie(prodotto_qr.get('categoria'))}")
-      str_lit.markdown(f"**Quantità:** {prodotto_qr.get('quantita') or 0}")
-      str_lit.markdown(f"**Posizione:** {prodotto_qr.get('posizione') or '-'}")
-      str_lit.markdown(f"**Note:** {prodotto_qr.get('note') or 'Nessuna nota.'}")
-    str_lit.caption("Questa scheda non consente modifiche e non mostra il prezzo di noleggio.")
+      str_lit.markdown(f"<div class='qr-title'>{prodotto_qr.get('nome') or 'Prodotto'}</div>", unsafe_allow_html=True)
+      str_lit.markdown(
+          f"<div class='qr-quantity'><div class='qr-quantity-label'>Quantità disponibile</div><div class='qr-quantity-value'>{prodotto_qr.get('quantita') or 0}</div></div>",
+          unsafe_allow_html=True,
+      )
+      note_qr = str(prodotto_qr.get("note") or "Nessuna nota inserita.")
+      str_lit.markdown(f"<div class='qr-note'><strong>Note</strong><br>{html.escape(note_qr)}</div>", unsafe_allow_html=True)
+      str_lit.markdown(
+          f"<div class='qr-meta'><b>Codice:</b> {html.escape(str(prodotto_qr.get('codice') or '-'))}<br>"
+          f"<b>Categoria:</b> {html.escape(testo_categorie(prodotto_qr.get('categoria')))}<br>"
+          f"<b>Posizione:</b> {html.escape(str(prodotto_qr.get('posizione') or '-'))}</div>",
+          unsafe_allow_html=True,
+      )
+    str_lit.caption("Scheda in sola lettura · Prezzo di noleggio non visualizzato")
     str_lit.stop()
   else:
     str_lit.error("Prodotto non trovato. Verifica che il QR sia aggiornato.")
