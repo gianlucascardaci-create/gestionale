@@ -323,7 +323,6 @@ CATEGORIE_PRODOTTI = [
     "TAVOLI",
     "SEDIE",
     "CALTAGIRONE",
-    "COMPLEMENTI VARI",
     "PIATTI E SOTTOPIATTI",
     "BICCHIERI",
     "CUCINA",
@@ -1933,10 +1932,7 @@ if codice_scansionato:
       scheda_tecnica_html = f"<div class='qr-tech-title'>Scheda tecnica</div><div class='qr-tech-grid'>{scheda_tecnica_html}</div>"
     str_lit.markdown(f"""
     <style>
-      #MainMenu, footer, header, [data-testid="stToolbar"], [data-testid="stStatusWidget"], [data-testid="stDecoration"], .stAppDeployButton, [class*="viewerBadge"], [class*="hostedBadge"], a[href*="streamlit.io"], a[href*="streamlit.app"], [aria-label*="Hosted"], [aria-label*="Created"]{{display:none !important;visibility:hidden !important;opacity:0 !important;height:0 !important;width:0 !important}}
-      html, body, #root, [data-testid="stApp"], [data-testid="stAppViewContainer"], [data-testid="stMain"], [data-testid="stAppViewBlockContainer"], section.main{{height:100vh !important;max-height:100vh !important;overflow:hidden !important}}
-      body{{overflow:hidden !important}}
-      .qr-screen{{max-width:850px;height:calc(100vh - 18px);max-height:calc(100vh - 18px);margin:0 auto;display:flex;align-items:center;color:#14213d;overflow:hidden}}
+      .qr-screen{{max-width:850px;min-height:calc(100vh - 72px);margin:0 auto;display:flex;align-items:center;color:#14213d}}
       .qr-card{{width:100%;display:grid;grid-template-columns:240px 1fr;gap:24px;align-items:center;padding:20px 24px;border:1px solid #e4e7ec;border-radius:18px;background:#fff;box-shadow:0 8px 28px rgba(16,42,67,.08)}}
       .qr-photo{{display:block;width:100%;height:220px;object-fit:contain;border-radius:12px;background:#f8fafc}}
       .qr-no-photo{{height:220px;display:flex;align-items:center;justify-content:center;background:#f8fafc;border-radius:12px;color:#98a2b3;font-size:.85rem}}
