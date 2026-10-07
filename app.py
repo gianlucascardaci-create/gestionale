@@ -1879,17 +1879,11 @@ if codice_scansionato and str_lit.session_state.area_selezionata is None:
 # Viene eseguita prima del login e non mostra mai il prezzo di noleggio.
 if codice_scansionato:
   try:
+    # Prima leggiamo sempre i campi essenziali. In questo modo la pagina QR
+    # continua a funzionare anche se Supabase non ha ancora le colonne della
+    # scheda tecnica oppure se il database usa ancora i vecchi nomi foto_url /
+    # descrizione.
     try:
-      prodotto_qr = (
-          supabase.table("prodotti_noleggio")
-          .select("id,codice,nome,categoria,quantita,posizione,note,foto_path,scheda_tecnica,scheda_materiale,scheda_colore,scheda_dimensione,scheda_note")
-          .eq("codice", codice_scansionato)
-          .limit(1)
-          .execute()
-          .data
-      )
-    except Exception:
-      # Compatibilità con database che non hanno ancora le colonne tecniche.
       prodotto_qr = (
           supabase.table("prodotti_noleggio")
           .select("id,codice,nome,categoria,quantita,posizione,note,foto_path")
@@ -1898,19 +1892,48 @@ if codice_scansionato:
           .execute()
           .data
       )
+    except Exception:
+      prodotto_qr = (
+          supabase.table("prodotti_noleggio")
+          .select("id,codice,nome,categoria,quantita,posizione,descrizione,foto_url")
+          .eq("codice", codice_scansionato)
+          .limit(1)
+          .execute()
+          .data
+      )
+
+    # Le colonne tecniche sono opzionali: se esistono le aggiungiamo con una
+    # seconda richiesta indipendente, senza invalidare i dati già trovati.
+    if prodotto_qr:
+      try:
+        dettagli_qr = (
+            supabase.table("prodotti_noleggio")
+            .select("scheda_tecnica,scheda_materiale,scheda_colore,scheda_dimensione,scheda_note")
+            .eq("id", prodotto_qr[0].get("id"))
+            .limit(1)
+            .execute()
+            .data
+        )
+        if dettagli_qr:
+          prodotto_qr[0].update(dettagli_qr[0])
+      except Exception:
+        # Database non ancora migrato: la scheda tecnica resterà vuota, ma
+        # foto, quantità e note continueranno a essere visualizzate.
+        pass
     prodotto_qr = prodotto_qr[0] if prodotto_qr else None
   except Exception as e:
     prodotto_qr = None
     str_lit.error(f"Impossibile leggere il prodotto: {e}")
 
   if prodotto_qr:
-    foto_qr = str(prodotto_qr.get("foto_path") or "").strip()
+    # Compatibilità tra struttura attuale e struttura precedente di Supabase.
+    foto_qr = str(prodotto_qr.get("foto_path") or prodotto_qr.get("foto_url") or "").strip()
     foto_html = (
         f"<img class='qr-photo' src='{html.escape(foto_qr, quote=True)}' alt='Foto prodotto'>"
         if foto_qr
         else "<div class='qr-no-photo'>Nessuna foto</div>"
     )
-    note_qr = html.escape(str(prodotto_qr.get("note") or "Nessuna nota inserita."))
+    note_qr = html.escape(str(prodotto_qr.get("note") or prodotto_qr.get("descrizione") or "Nessuna nota inserita."))
     nome_qr = html.escape(str(prodotto_qr.get("nome") or "Prodotto"))
     codice_qr = html.escape(str(prodotto_qr.get("codice") or "-"))
     categoria_qr = html.escape(testo_categorie(prodotto_qr.get("categoria")))
