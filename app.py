@@ -1954,7 +1954,7 @@ if codice_scansionato:
     )
     if scheda_tecnica_html:
       scheda_tecnica_html = f"<div class='qr-tech-title'>Scheda tecnica</div><div class='qr-tech-grid'>{scheda_tecnica_html}</div>"
-    str_lit.markdown(dedent(f"""
+    html_scheda_qr = dedent(f"""
     <style>
       .qr-screen{{max-width:850px;min-height:calc(100vh - 72px);margin:0 auto;display:flex;align-items:center;color:#14213d}}
       .qr-card{{width:100%;display:grid;grid-template-columns:240px 1fr;gap:24px;align-items:center;padding:20px 24px;border:1px solid #e4e7ec;border-radius:18px;background:#fff;box-shadow:0 8px 28px rgba(16,42,67,.08)}}
@@ -1984,7 +1984,10 @@ if codice_scansionato:
       <div class='qr-meta'><b>Codice:</b> {codice_qr} · <b>Categoria:</b> {categoria_qr}<br><b>Posizione:</b> {posizione_qr}</div>
       {scheda_tecnica_html}
       </div></div></div>
-    """), unsafe_allow_html=True)
+    """)
+    # Un iframe HTML evita che alcune versioni/browser di Streamlit mostrino
+    # i tag <div>, <img> e <style> come testo letterale.
+    components.html(html_scheda_qr, height=690, scrolling=False)
     str_lit.caption("Scheda in sola lettura · Prezzo di noleggio non visualizzato")
     str_lit.stop()
   else:
