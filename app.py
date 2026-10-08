@@ -1938,7 +1938,8 @@ if codice_scansionato:
       html, body, #root, [data-testid="stApp"], [data-testid="stAppViewContainer"], [data-testid="stMain"], [data-testid="stAppViewBlockContainer"], section.main{{height:100vh !important;max-height:100vh !important;overflow:hidden !important}}
       body{{overflow:hidden !important}}
       .qr-screen{{max-width:900px;height:calc(100vh - 18px);max-height:calc(100vh - 18px);margin:0 auto;display:flex;align-items:center;color:#14213d;overflow:hidden}}
-      .qr-card{{width:100%;display:grid;grid-template-columns:minmax(190px,230px) minmax(0,1fr);gap:24px;align-items:start;padding:22px 26px;border:1px solid #e4e7ec;border-radius:18px;background:#fff;box-shadow:0 8px 28px rgba(16,42,67,.08);min-width:0}}
+      .qr-card{{width:100%;padding:22px 26px;border:1px solid #e4e7ec;border-radius:18px;background:#fff;box-shadow:0 8px 28px rgba(16,42,67,.08);min-width:0}}
+      .qr-top{{display:grid;grid-template-columns:minmax(190px,230px) minmax(0,1fr);gap:24px;align-items:start;min-width:0}}
       .qr-photo{{display:block;width:100%;height:230px;object-fit:contain;object-position:center;border-radius:12px;background:#f8fafc}}
       .qr-no-photo{{height:220px;display:flex;align-items:center;justify-content:center;background:#f8fafc;border-radius:12px;color:#98a2b3;font-size:.85rem}}
       .qr-title{{font-size:1.45rem;font-weight:800;color:#083278;margin:0 0 2px}}
@@ -1948,15 +1949,15 @@ if codice_scansionato:
       .qr-quantity-value{{font-size:2rem;font-weight:850;line-height:1.05;margin-top:2px}}
       .qr-note{{background:#f3f8ff;border:1px solid #d7e7fa;border-radius:10px;padding:10px 13px;margin-top:6px;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;line-height:1.4;font-size:.86rem;max-height:92px;overflow:auto}}
       .qr-meta{{font-size:.72rem;color:#667085;line-height:1.5;margin-top:8px}}
-      .qr-tech-title{{font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:#083278;font-weight:800;margin-top:10px}}
-      .qr-tech-grid{{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin-top:6px;min-width:0}}
-      .qr-tech-item{{font-size:.82rem;color:#667085;line-height:1.35;min-width:0;overflow-wrap:anywhere;word-break:break-word}}
-      .qr-tech-item span{{display:block;font-size:.61rem;text-transform:uppercase;letter-spacing:.04em;color:#98a2b3}}
+      .qr-tech-title{{font-size:.9rem;text-transform:uppercase;letter-spacing:.1em;color:#083278;font-weight:850;margin:18px 0 8px;padding-top:13px;border-top:1px solid #e7edf5}}
+      .qr-tech-grid{{display:grid;grid-template-columns:1fr 1fr;gap:9px 14px;margin-top:0;min-width:0}}
+      .qr-tech-item{{font-size:.92rem;color:#667085;line-height:1.4;min-width:0;overflow-wrap:anywhere;word-break:break-word;background:#f3f8ff;border:1px solid #d7e7fa;border-radius:10px;padding:9px 11px;min-height:58px;max-height:108px;overflow:auto}}
+      .qr-tech-item span{{display:block;font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:#71809a;margin-bottom:3px;font-weight:750}}
       .qr-tech-item b{{font-weight:650;color:#344054;display:block}}
       .qr-info{{min-width:0;overflow:hidden}}
-      @media(max-width:640px){{.qr-screen{{height:auto;min-height:calc(100vh - 24px);align-items:flex-start;padding-top:8px;overflow:visible}}.qr-card{{grid-template-columns:1fr;gap:12px;padding:14px 16px;border-radius:14px}}.qr-photo,.qr-no-photo{{height:175px}}.qr-title{{font-size:1.2rem}}.qr-quantity{{padding:9px 13px;margin:6px 0 8px}}.qr-quantity-value{{font-size:1.75rem}}.qr-note{{font-size:.8rem;padding:8px 11px;max-height:110px}}.qr-tech-grid{{grid-template-columns:1fr 1fr}}.qr-tech-item{{font-size:.8rem}}}}
+      @media(max-width:640px){{.qr-screen{{height:auto;min-height:calc(100vh - 24px);align-items:flex-start;padding-top:8px;overflow:visible}}.qr-card{{padding:14px 16px;border-radius:14px}}.qr-top{{grid-template-columns:1fr;gap:12px}}.qr-photo,.qr-no-photo{{height:175px}}.qr-title{{font-size:1.2rem}}.qr-quantity{{padding:9px 13px;margin:6px 0 8px}}.qr-quantity-value{{font-size:1.75rem}}.qr-note{{font-size:.8rem;padding:8px 11px;max-height:110px}}.qr-tech-grid{{grid-template-columns:1fr}}.qr-tech-item{{font-size:.88rem;max-height:96px}}}}
     </style>
-    <div class="qr-screen"><div class="qr-card">
+    <div class="qr-screen"><div class="qr-card"><div class="qr-top">
       <div>{foto_html}</div><div class="qr-info">
       <div class="qr-title">Scheda prodotto</div>
       <div class="qr-subtitle">Consultazione rapida</div>
@@ -1964,8 +1965,9 @@ if codice_scansionato:
       <div class='qr-quantity'><div class='qr-quantity-label'>Quantità disponibile</div><div class='qr-quantity-value'>{quantita_qr}</div></div>
       <div class='qr-note'><strong>Note</strong><br>{note_qr}</div>
       <div class='qr-meta'><b>Codice:</b> {codice_qr} · <b>Categoria:</b> {categoria_qr}<br><b>Posizione:</b> {posizione_qr}</div>
+      </div></div>
       {scheda_tecnica_html}
-      </div></div></div>
+      </div></div>
     """)
     # In alcune versioni/deployment di Streamlit il parser Markdown può
     # mostrare l'HTML come testo. Un iframe HTML dedicato evita il problema
