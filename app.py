@@ -1926,6 +1926,8 @@ if codice_scansionato:
         "note": prodotto_qr.get("scheda_note") or scheda_qr.get("note", ""),
     })
     campi_scheda_qr = [("Materiale", scheda_qr.get("materiale")), ("Colore", scheda_qr.get("colore")), ("Dimensione", scheda_qr.get("dimensione")), ("Note tecniche", scheda_qr.get("note"))]
+    lunghezza_scheda_qr = sum(len(str(valore or "")) for _, valore in campi_scheda_qr)
+    densita_scheda_qr = " qr-compact" if lunghezza_scheda_qr > 220 else (" qr-densa" if lunghezza_scheda_qr > 110 else "")
     scheda_tecnica_html = "".join(
         f"<div class='qr-tech-item'><span>{html.escape(etichetta)}</span><b>{html.escape(str(valore).strip())}</b></div>"
         for etichetta, valore in campi_scheda_qr if str(valore or "").strip()
@@ -1947,17 +1949,19 @@ if codice_scansionato:
       .qr-quantity{{background:#083278;color:white;border-radius:12px;padding:11px 16px;margin:8px 0 10px}}
       .qr-quantity-label{{font-size:.64rem;text-transform:uppercase;letter-spacing:.12em;opacity:.82}}
       .qr-quantity-value{{font-size:2rem;font-weight:850;line-height:1.05;margin-top:2px}}
-      .qr-note{{background:#f3f8ff;border:1px solid #d7e7fa;border-radius:10px;padding:10px 13px;margin-top:6px;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;line-height:1.4;font-size:.86rem;max-height:92px;overflow:auto}}
+      .qr-note{{background:#f3f8ff;border:1px solid #d7e7fa;border-radius:10px;padding:10px 13px;margin-top:6px;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;line-height:1.32;font-size:.82rem}}
       .qr-meta{{font-size:.72rem;color:#667085;line-height:1.5;margin-top:8px}}
       .qr-tech-title{{font-size:.9rem;text-transform:uppercase;letter-spacing:.1em;color:#083278;font-weight:850;margin:18px 0 8px;padding-top:13px;border-top:1px solid #e7edf5}}
       .qr-tech-grid{{display:grid;grid-template-columns:1fr 1fr;gap:9px 14px;margin-top:0;min-width:0}}
-      .qr-tech-item{{font-size:.92rem;color:#667085;line-height:1.4;min-width:0;overflow-wrap:anywhere;word-break:break-word;background:#f3f8ff;border:1px solid #d7e7fa;border-radius:10px;padding:9px 11px;min-height:58px;max-height:108px;overflow:auto}}
+      .qr-tech-item{{font-size:.88rem;color:#667085;line-height:1.28;min-width:0;overflow-wrap:anywhere;word-break:break-word;background:#f3f8ff;border:1px solid #d7e7fa;border-radius:10px;padding:8px 10px;min-height:52px}}
       .qr-tech-item span{{display:block;font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:#71809a;margin-bottom:3px;font-weight:750}}
       .qr-tech-item b{{font-weight:650;color:#344054;display:block}}
       .qr-info{{min-width:0;overflow:hidden}}
-      @media(max-width:640px){{.qr-screen{{height:auto;min-height:calc(100vh - 24px);align-items:flex-start;padding-top:8px;overflow:visible}}.qr-card{{padding:14px 16px;border-radius:14px}}.qr-top{{grid-template-columns:1fr;gap:12px}}.qr-photo,.qr-no-photo{{height:175px}}.qr-title{{font-size:1.2rem}}.qr-quantity{{padding:9px 13px;margin:6px 0 8px}}.qr-quantity-value{{font-size:1.75rem}}.qr-note{{font-size:.8rem;padding:8px 11px;max-height:110px}}.qr-tech-grid{{grid-template-columns:1fr}}.qr-tech-item{{font-size:.88rem;max-height:96px}}}}
+      .qr-card.qr-densa{{padding:16px 20px;gap:16px}}.qr-card.qr-densa .qr-photo{{height:185px}}.qr-card.qr-densa .qr-title{{font-size:1.25rem}}.qr-card.qr-densa .qr-quantity{{padding:8px 12px;margin:5px 0 7px}}.qr-card.qr-densa .qr-quantity-value{{font-size:1.7rem}}.qr-card.qr-densa .qr-tech-title{{margin-top:11px;padding-top:9px}}.qr-card.qr-densa .qr-tech-item{{font-size:.76rem;padding:6px 8px;min-height:42px}}
+      .qr-card.qr-compact{{padding:12px 16px}}.qr-card.qr-compact .qr-top{{gap:14px}}.qr-card.qr-compact .qr-photo{{height:150px}}.qr-card.qr-compact .qr-title{{font-size:1.05rem}}.qr-card.qr-compact .qr-subtitle{{font-size:.65rem;margin-bottom:5px}}.qr-card.qr-compact .qr-quantity{{padding:6px 10px;margin:3px 0 5px}}.qr-card.qr-compact .qr-quantity-label{{font-size:.55rem}}.qr-card.qr-compact .qr-quantity-value{{font-size:1.35rem}}.qr-card.qr-compact .qr-note{{font-size:.68rem;padding:6px 8px;line-height:1.18}}.qr-card.qr-compact .qr-meta{{font-size:.6rem;margin-top:4px}}.qr-card.qr-compact .qr-tech-title{{font-size:.7rem;margin-top:7px;padding-top:6px;margin-bottom:4px}}.qr-card.qr-compact .qr-tech-item{{font-size:.64rem;line-height:1.15;padding:5px 6px;min-height:32px}}.qr-card.qr-compact .qr-tech-item span{{font-size:.5rem;margin-bottom:1px}}
+      @media(max-width:640px){{.qr-screen{{height:auto;min-height:calc(100vh - 24px);align-items:flex-start;padding-top:8px;overflow:visible}}.qr-card{{padding:14px 16px;border-radius:14px}}.qr-top{{grid-template-columns:1fr;gap:12px}}.qr-photo,.qr-no-photo{{height:175px}}.qr-title{{font-size:1.2rem}}.qr-quantity{{padding:9px 13px;margin:6px 0 8px}}.qr-quantity-value{{font-size:1.75rem}}.qr-tech-grid{{grid-template-columns:1fr}}.qr-tech-item{{font-size:.88rem}}.qr-card.qr-compact .qr-photo{{height:125px}}.qr-card.qr-compact .qr-tech-grid{{grid-template-columns:1fr 1fr}}}}
     </style>
-    <div class="qr-screen"><div class="qr-card"><div class="qr-top">
+    <div class="qr-screen"><div class="qr-card{densita_scheda_qr}"><div class="qr-top">
       <div>{foto_html}</div><div class="qr-info">
       <div class="qr-title">Scheda prodotto</div>
       <div class="qr-subtitle">Consultazione rapida</div>
