@@ -9,6 +9,7 @@ import socket
 import uuid
 import difflib
 import re
+import textwrap
 import unicodedata
 import qrcode
 import streamlit as str_lit
@@ -1931,7 +1932,7 @@ if codice_scansionato:
     )
     if scheda_tecnica_html:
       scheda_tecnica_html = f"<div class='qr-tech-title'>Scheda tecnica</div><div class='qr-tech-grid'>{scheda_tecnica_html}</div>"
-    str_lit.markdown(f"""
+    html_scheda_qr = textwrap.dedent(f"""
     <style>
       #MainMenu, footer, header, [data-testid="stToolbar"], [data-testid="stStatusWidget"], [data-testid="stDecoration"], .stAppDeployButton, [class*="viewerBadge"], [class*="hostedBadge"], a[href*="streamlit.io"], a[href*="streamlit.app"], [aria-label*="Hosted"], [aria-label*="Created"]{{display:none !important;visibility:hidden !important;opacity:0 !important;height:0 !important;width:0 !important}}
       html, body, #root, [data-testid="stApp"], [data-testid="stAppViewContainer"], [data-testid="stMain"], [data-testid="stAppViewBlockContainer"], section.main{{height:100vh !important;max-height:100vh !important;overflow:hidden !important}}
@@ -1965,7 +1966,8 @@ if codice_scansionato:
       <div class='qr-meta'><b>Codice:</b> {codice_qr} · <b>Categoria:</b> {categoria_qr}<br><b>Posizione:</b> {posizione_qr}</div>
       {scheda_tecnica_html}
       </div></div></div>
-    """, unsafe_allow_html=True)
+    """)
+    str_lit.markdown(html_scheda_qr, unsafe_allow_html=True)
     str_lit.caption("Scheda in sola lettura · Prezzo di noleggio non visualizzato")
     str_lit.stop()
   else:
