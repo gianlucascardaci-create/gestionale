@@ -10,7 +10,6 @@ import uuid
 import difflib
 import re
 import unicodedata
-from textwrap import dedent
 import qrcode
 import streamlit as str_lit
 import streamlit.components.v1 as components
@@ -324,6 +323,7 @@ CATEGORIE_PRODOTTI = [
     "TAVOLI",
     "SEDIE",
     "CALTAGIRONE",
+    "COMPLEMENTI VARI",
     "PIATTI E SOTTOPIATTI",
     "BICCHIERI",
     "CUCINA",
@@ -1880,11 +1880,17 @@ if codice_scansionato and str_lit.session_state.area_selezionata is None:
 # Viene eseguita prima del login e non mostra mai il prezzo di noleggio.
 if codice_scansionato:
   try:
-    # Prima leggiamo sempre i campi essenziali. In questo modo la pagina QR
-    # continua a funzionare anche se Supabase non ha ancora le colonne della
-    # scheda tecnica oppure se il database usa ancora i vecchi nomi foto_url /
-    # descrizione.
     try:
+      prodotto_qr = (
+          supabase.table("prodotti_noleggio")
+          .select("id,codice,nome,categoria,quantita,posizione,note,foto_path,scheda_tecnica,scheda_materiale,scheda_colore,scheda_dimensione,scheda_note")
+          .eq("codice", codice_scansionato)
+          .limit(1)
+          .execute()
+          .data
+      )
+    except Exception:
+      # Compatibilità con database che non hanno ancora le colonne tecniche.
       prodotto_qr = (
           supabase.table("prodotti_noleggio")
           .select("id,codice,nome,categoria,quantita,posizione,note,foto_path")
@@ -1893,48 +1899,19 @@ if codice_scansionato:
           .execute()
           .data
       )
-    except Exception:
-      prodotto_qr = (
-          supabase.table("prodotti_noleggio")
-          .select("id,codice,nome,categoria,quantita,posizione,descrizione,foto_url")
-          .eq("codice", codice_scansionato)
-          .limit(1)
-          .execute()
-          .data
-      )
-
-    # Le colonne tecniche sono opzionali: se esistono le aggiungiamo con una
-    # seconda richiesta indipendente, senza invalidare i dati già trovati.
-    if prodotto_qr:
-      try:
-        dettagli_qr = (
-            supabase.table("prodotti_noleggio")
-            .select("scheda_tecnica,scheda_materiale,scheda_colore,scheda_dimensione,scheda_note")
-            .eq("id", prodotto_qr[0].get("id"))
-            .limit(1)
-            .execute()
-            .data
-        )
-        if dettagli_qr:
-          prodotto_qr[0].update(dettagli_qr[0])
-      except Exception:
-        # Database non ancora migrato: la scheda tecnica resterà vuota, ma
-        # foto, quantità e note continueranno a essere visualizzate.
-        pass
     prodotto_qr = prodotto_qr[0] if prodotto_qr else None
   except Exception as e:
     prodotto_qr = None
     str_lit.error(f"Impossibile leggere il prodotto: {e}")
 
   if prodotto_qr:
-    # Compatibilità tra struttura attuale e struttura precedente di Supabase.
-    foto_qr = str(prodotto_qr.get("foto_path") or prodotto_qr.get("foto_url") or "").strip()
+    foto_qr = str(prodotto_qr.get("foto_path") or "").strip()
     foto_html = (
         f"<img class='qr-photo' src='{html.escape(foto_qr, quote=True)}' alt='Foto prodotto'>"
         if foto_qr
         else "<div class='qr-no-photo'>Nessuna foto</div>"
     )
-    note_qr = html.escape(str(prodotto_qr.get("note") or prodotto_qr.get("descrizione") or "Nessuna nota inserita."))
+    note_qr = html.escape(str(prodotto_qr.get("note") or "Nessuna nota inserita."))
     nome_qr = html.escape(str(prodotto_qr.get("nome") or "Prodotto"))
     codice_qr = html.escape(str(prodotto_qr.get("codice") or "-"))
     categoria_qr = html.escape(testo_categorie(prodotto_qr.get("categoria")))
@@ -1954,28 +1931,32 @@ if codice_scansionato:
     )
     if scheda_tecnica_html:
       scheda_tecnica_html = f"<div class='qr-tech-title'>Scheda tecnica</div><div class='qr-tech-grid'>{scheda_tecnica_html}</div>"
-    html_scheda_qr = dedent(f"""
+    str_lit.markdown(f"""
     <style>
-      .qr-screen{{max-width:850px;min-height:calc(100vh - 72px);margin:0 auto;display:flex;align-items:center;color:#14213d}}
-      .qr-card{{width:100%;display:grid;grid-template-columns:240px 1fr;gap:24px;align-items:center;padding:20px 24px;border:1px solid #e4e7ec;border-radius:18px;background:#fff;box-shadow:0 8px 28px rgba(16,42,67,.08)}}
-      .qr-photo{{display:block;width:100%;height:220px;object-fit:contain;border-radius:12px;background:#f8fafc}}
+      #MainMenu, footer, header, [data-testid="stToolbar"], [data-testid="stStatusWidget"], [data-testid="stDecoration"], .stAppDeployButton, [class*="viewerBadge"], [class*="hostedBadge"], a[href*="streamlit.io"], a[href*="streamlit.app"], [aria-label*="Hosted"], [aria-label*="Created"]{{display:none !important;visibility:hidden !important;opacity:0 !important;height:0 !important;width:0 !important}}
+      html, body, #root, [data-testid="stApp"], [data-testid="stAppViewContainer"], [data-testid="stMain"], [data-testid="stAppViewBlockContainer"], section.main{{height:100vh !important;max-height:100vh !important;overflow:hidden !important}}
+      body{{overflow:hidden !important}}
+      .qr-screen{{max-width:900px;height:calc(100vh - 18px);max-height:calc(100vh - 18px);margin:0 auto;display:flex;align-items:center;color:#14213d;overflow:hidden}}
+      .qr-card{{width:100%;display:grid;grid-template-columns:minmax(190px,230px) minmax(0,1fr);gap:24px;align-items:start;padding:22px 26px;border:1px solid #e4e7ec;border-radius:18px;background:#fff;box-shadow:0 8px 28px rgba(16,42,67,.08);min-width:0}}
+      .qr-photo{{display:block;width:100%;height:230px;object-fit:contain;object-position:center;border-radius:12px;background:#f8fafc}}
       .qr-no-photo{{height:220px;display:flex;align-items:center;justify-content:center;background:#f8fafc;border-radius:12px;color:#98a2b3;font-size:.85rem}}
       .qr-title{{font-size:1.45rem;font-weight:800;color:#083278;margin:0 0 2px}}
       .qr-subtitle{{font-size:.76rem;color:#667085;margin:0 0 10px}}
       .qr-quantity{{background:#083278;color:white;border-radius:12px;padding:11px 16px;margin:8px 0 10px}}
       .qr-quantity-label{{font-size:.64rem;text-transform:uppercase;letter-spacing:.12em;opacity:.82}}
       .qr-quantity-value{{font-size:2rem;font-weight:850;line-height:1.05;margin-top:2px}}
-      .qr-note{{background:#f3f8ff;border:1px solid #d7e7fa;border-radius:10px;padding:10px 13px;margin-top:6px;white-space:pre-wrap;line-height:1.35;font-size:.86rem}}
+      .qr-note{{background:#f3f8ff;border:1px solid #d7e7fa;border-radius:10px;padding:10px 13px;margin-top:6px;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;line-height:1.4;font-size:.86rem;max-height:92px;overflow:auto}}
       .qr-meta{{font-size:.72rem;color:#667085;line-height:1.5;margin-top:8px}}
       .qr-tech-title{{font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:#083278;font-weight:800;margin-top:10px}}
-      .qr-tech-grid{{display:grid;grid-template-columns:1fr 1fr;gap:5px 12px;margin-top:4px}}
-      .qr-tech-item{{font-size:.7rem;color:#667085;line-height:1.3}}
+      .qr-tech-grid{{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin-top:6px;min-width:0}}
+      .qr-tech-item{{font-size:.82rem;color:#667085;line-height:1.35;min-width:0;overflow-wrap:anywhere;word-break:break-word}}
       .qr-tech-item span{{display:block;font-size:.61rem;text-transform:uppercase;letter-spacing:.04em;color:#98a2b3}}
-      .qr-tech-item b{{font-weight:650;color:#344054}}
-      @media(max-width:640px){{.qr-screen{{min-height:calc(100vh - 24px);align-items:flex-start;padding-top:8px}}.qr-card{{grid-template-columns:1fr;gap:10px;padding:14px 16px;border-radius:14px}}.qr-photo,.qr-no-photo{{height:150px}}.qr-title{{font-size:1.2rem}}.qr-quantity{{padding:9px 13px;margin:6px 0 8px}}.qr-quantity-value{{font-size:1.75rem}}.qr-note{{font-size:.8rem;padding:8px 11px}}}}
+      .qr-tech-item b{{font-weight:650;color:#344054;display:block}}
+      .qr-info{{min-width:0;overflow:hidden}}
+      @media(max-width:640px){{.qr-screen{{height:auto;min-height:calc(100vh - 24px);align-items:flex-start;padding-top:8px;overflow:visible}}.qr-card{{grid-template-columns:1fr;gap:12px;padding:14px 16px;border-radius:14px}}.qr-photo,.qr-no-photo{{height:175px}}.qr-title{{font-size:1.2rem}}.qr-quantity{{padding:9px 13px;margin:6px 0 8px}}.qr-quantity-value{{font-size:1.75rem}}.qr-note{{font-size:.8rem;padding:8px 11px;max-height:110px}}.qr-tech-grid{{grid-template-columns:1fr 1fr}}.qr-tech-item{{font-size:.8rem}}}}
     </style>
     <div class="qr-screen"><div class="qr-card">
-      <div>{foto_html}</div><div>
+      <div>{foto_html}</div><div class="qr-info">
       <div class="qr-title">Scheda prodotto</div>
       <div class="qr-subtitle">Consultazione rapida</div>
       <div class='qr-title' style='font-size:1.1rem'>{nome_qr}</div>
@@ -1984,10 +1965,7 @@ if codice_scansionato:
       <div class='qr-meta'><b>Codice:</b> {codice_qr} · <b>Categoria:</b> {categoria_qr}<br><b>Posizione:</b> {posizione_qr}</div>
       {scheda_tecnica_html}
       </div></div></div>
-    """)
-    # Un iframe HTML evita che alcune versioni/browser di Streamlit mostrino
-    # i tag <div>, <img> e <style> come testo letterale.
-    components.html(html_scheda_qr, height=690, scrolling=False)
+    """, unsafe_allow_html=True)
     str_lit.caption("Scheda in sola lettura · Prezzo di noleggio non visualizzato")
     str_lit.stop()
   else:
