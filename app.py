@@ -1967,7 +1967,10 @@ if codice_scansionato:
       {scheda_tecnica_html}
       </div></div></div>
     """)
-    str_lit.markdown(html_scheda_qr, unsafe_allow_html=True)
+    # In alcune versioni/deployment di Streamlit il parser Markdown può
+    # mostrare l'HTML come testo. Un iframe HTML dedicato evita il problema
+    # e mantiene il layout QR isolato e stabile.
+    components.html(html_scheda_qr, height=620, scrolling=False)
     str_lit.caption("Scheda in sola lettura · Prezzo di noleggio non visualizzato")
     str_lit.stop()
   else:
