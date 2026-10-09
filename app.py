@@ -5,6 +5,9 @@ from io import BytesIO
 import json
 import html
 import os
+import hashlib
+import hmac
+import secrets
 import socket
 import uuid
 import difflib
@@ -41,22 +44,57 @@ str_lit.set_page_config(
 # ==============================================================================
 try:
     SUPABASE_URL = str_lit.secrets["SUPABASE_URL"]
-    SUPABASE_KEY = str_lit.secrets["SUPABASE_KEY"]
+    SUPABASE_SERVICE_ROLE_KEY = str_lit.secrets["SUPABASE_SERVICE_ROLE_KEY"]
 except Exception:
-    str_lit.error("Configurare SUPABASE_URL e SUPABASE_KEY nei Secrets di Streamlit.")
+    str_lit.error("Configurare SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY nei Secrets di Streamlit.")
     str_lit.stop()
 BUCKET_IMMAGINI = "immagini_prodotti"
 BUCKET_ALLEGATI_NOLEGGI = "allegati_noleggi"
 
 @str_lit.cache_resource
 def init_supabase() -> Client:
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
+    return create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-if not SUPABASE_URL or not SUPABASE_KEY:
-    str_lit.error("⚠️ Sostituisci SUPABASE_URL e SUPABASE_KEY con le tue credenziali reali.")
+if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+    str_lit.error("⚠️ Configurare SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY nei Secrets di Streamlit.")
     str_lit.stop()
 
 supabase = init_supabase()
+
+PASSWORD_SCHEME = "pbkdf2_sha256"
+PASSWORD_ITERATIONS = 310000
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PASSWORD_ITERATIONS)
+    return f"{PASSWORD_SCHEME}${PASSWORD_ITERATIONS}${salt.hex()}${digest.hex()}"
+
+def verifica_password(password: str, valore_salvato: str) -> bool:
+    if not valore_salvato:
+        return False
+    if not valore_salvato.startswith(f"{PASSWORD_SCHEME}$"):
+        return hmac.compare_digest(valore_salvato, password)
+    try:
+        _, iterazioni, salt_hex, digest_hex = valore_salvato.split("$", 3)
+        digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), bytes.fromhex(salt_hex), int(iterazioni))
+        return hmac.compare_digest(digest.hex(), digest_hex)
+    except (ValueError, TypeError):
+        return False
+
+@str_lit.cache_resource
+def migra_password_storiche():
+    try:
+        risultato = supabase.table("utenti_autorizzati").select("id,password").limit(1000).execute()
+        for utente in (risultato.data or []):
+            valore = utente.get("password") or ""
+            if valore and not valore.startswith(f"{PASSWORD_SCHEME}$"):
+                supabase.table("utenti_autorizzati").update({"password": hash_password(valore)}).eq("id", utente["id"]).execute()
+    except Exception as errore:
+        str_lit.error(f"Migrazione password non completata: {errore}")
+        str_lit.stop()
+
+migra_password_storiche()
+
 
 str_lit.markdown(
     """
@@ -520,7 +558,11 @@ def salva_prodotto_singolo(prodotto):
 
 
 def salva_utente_singolo(username, dati):
-  payload = {"username": username, "password": dati.get("password"), "ruolo": dati.get("ruolo"), "nome": dati.get("nome"), "email": dati.get("email")}
+  valore_password = dati.get("password") or ""
+  if valore_password and not valore_password.startswith(f"{PASSWORD_SCHEME}$"):
+    valore_password = hash_password(valore_password)
+    dati["password"] = valore_password
+  payload = {"username": username, "password": valore_password, "ruolo": dati.get("ruolo"), "nome": dati.get("nome"), "email": dati.get("email")}
   esistente = supabase.table("utenti_autorizzati").select("id").eq("username", username).limit(1).execute()
   if esistente.data:
     return bool(supabase.table("utenti_autorizzati").update(payload).eq("username", username).execute().data)
@@ -1263,37 +1305,37 @@ if "utenti_autorizzati" not in str_lit.session_state:
   else:
     str_lit.session_state.utenti_autorizzati = {
         "admin": {
-            "password": "123",
+            "password": hash_password("123"),
             "ruolo": "Amministratore",
             "nome": "Gianluca (Admin)",
             "email": "admin@gestionale.it",
         },
         "wedding": {
-            "password": "wedding123",
+            "password": hash_password("wedding123"),
             "ruolo": "Wedding",
             "nome": "Cristina (Wedding Planner)",
             "email": "wedding@gestionale.it",
         },
         "cucina": {
-            "password": "cucina123",
+            "password": hash_password("cucina123"),
             "ruolo": "Cucina",
             "nome": "Chef Cucina",
             "email": "cucina@gestionale.it",
         },
         "sala": {
-            "password": "sala123",
+            "password": hash_password("sala123"),
             "ruolo": "Sala",
             "nome": "Responsabile Sala",
             "email": "sala@gestionale.it",
         },
         "magazzino": {
-            "password": "mag123",
+            "password": hash_password("mag123"),
             "ruolo": "Magazzino",
             "nome": "Addetto Magazzino",
             "email": "magazzino@gestionale.it",
         },
         "magazzino2": {
-            "password": "mag2123",
+            "password": hash_password("mag2123"),
             "ruolo": "Magazzino2",
             "nome": "Assistente Magazzino",
             "email": "magazzino2@gestionale.it",
@@ -2428,7 +2470,7 @@ if str_lit.session_state.utente_loggato is None:
         trovato = None
         for usr, dati in str_lit.session_state.utenti_autorizzati.items():
           if usr == username_inserito or dati.get("email") == username_inserito:
-            if dati["password"] == password_inserita:
+            if verifica_password(password_inserita, dati.get("password", "")):
               trovato = dati.copy()
               trovato["username_chiave"] = usr
         if trovato:
@@ -3018,7 +3060,7 @@ else:
               str_lit.error("Questo username esiste già. Scegline un altro.")
             else:
               str_lit.session_state.utenti_autorizzati[ins_user_key.strip()] = {
-                  "password": ins_pass.strip(),
+                  "password": hash_password(ins_pass.strip()),
                   "ruolo": ins_ruolo,
                   "nome": ins_nome.strip() or ins_user_key.strip(),
                   "email": ins_email.strip(),
@@ -3042,7 +3084,7 @@ else:
                   f" `{usr_v.get('ruolo', '-')}` | ✉️ **Email:**"
                   f" {usr_v.get('email', '-')}"
               )
-              str_lit.markdown(f"🔑 **Password:** `{usr_v.get('password', '-')}`")
+              str_lit.caption("Password protetta e non visualizzabile")
             with col_del_u:
               if usr_k != "admin":
                 if str_lit.button(
