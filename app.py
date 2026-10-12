@@ -2053,6 +2053,28 @@ def mostra_noleggi_demo():
                 elif evento.get("id"):
                   str_lit.session_state.noleggio_demo_modifica = evento.get("id")
               str_lit.rerun()
+            # Le righe colorate sopra sono un'anteprima grafica; questi
+            # pulsanti trasparenti rendono invece ogni evento realmente
+            # cliccabile, anche quando nella stessa giornata ce ne sono più di uno.
+            for indice_evento, (tipo_evento, evento) in enumerate(eventi_giornata):
+              if tipo_evento == "noleggio":
+                etichetta_evento = ("🟠 " if evento.get("stato") != "confermato" else "🔵 ") + f"Noleggio · {evento.get('titolo', 'Noleggio')}"
+              else:
+                etichetta_evento = f"🟢 Catering · {evento.get('nome_evento', 'Evento')}"
+              if str_lit.button(
+                  etichetta_evento[:52],
+                  key=f"planner_open_event_{giorno}_{indice_evento}",
+                  use_container_width=True,
+              ):
+                str_lit.session_state.noleggio_demo_giorno_selezionato = giorno
+                str_lit.session_state.eventi_da_scegliere = []
+                str_lit.session_state.noleggio_demo_modifica = None
+                str_lit.session_state.evento_catering_demo_selezionato = None
+                if tipo_evento == "catering":
+                  str_lit.session_state.evento_catering_demo_selezionato = evento
+                elif evento.get("id"):
+                  str_lit.session_state.noleggio_demo_modifica = evento.get("id")
+                str_lit.rerun()
           else:
             str_lit.markdown(f"<div class='planner-static-number'>{giorno.day}</div>", unsafe_allow_html=True)
 
@@ -2355,19 +2377,24 @@ def modale_crea_evento(data_precompilata=None):
     def comp_sezione_creazione(titolo_rep, chiave_pref):
       colori_rep = {"Note per tutti": ("#eef5ff", "#cfe0f6"), "Note per la sala": ("#f0f8f2", "#d6eadb"), "Note per la cucina": ("#fff7eb", "#f2dfbd"), "Note per il magazzino": ("#f4f0fa", "#e3d8f0")}
       sfondo_rep, bordo_rep = colori_rep.get(titolo_rep, ("#f7f8fb", "#e5e9f0"))
-      str_lit.markdown(f"<div style='padding:8px 10px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:700;color:#344054;margin:8px 0 4px'>{titolo_rep}</div>", unsafe_allow_html=True)
-      t_val = str_lit.text_area(
-          f"Testo note - {titolo_rep}",
-          key=f"dialog_crea_{chiave_pref}_t",
-          label_visibility="collapsed",
-          placeholder=f"Inserisci note per {titolo_rep.lower()}...",
-      )
-      f_val = str_lit.file_uploader(
-          f"Aggiungi allegati ({titolo_rep})",
-          accept_multiple_files=True,
-          type=["png", "jpg", "jpeg", "pdf"],
-          key=f"dialog_crea_{chiave_pref}_f",
-      )
+      with str_lit.container(border=True):
+        col_titolo, col_file = str_lit.columns([5, 1])
+        with col_titolo:
+          str_lit.markdown(f"<div style='padding:8px 10px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:700;color:#344054'>{titolo_rep}</div>", unsafe_allow_html=True)
+        with col_file:
+          f_val = str_lit.file_uploader(
+              "📎",
+              accept_multiple_files=True,
+              type=["png", "jpg", "jpeg", "pdf"],
+              key=f"dialog_crea_{chiave_pref}_f",
+              label_visibility="collapsed",
+          )
+        t_val = str_lit.text_area(
+            f"Testo note - {titolo_rep}",
+            key=f"dialog_crea_{chiave_pref}_t",
+            label_visibility="collapsed",
+            placeholder=f"Inserisci note per {titolo_rep.lower()}...",
+        )
       str_lit.markdown("")
       return t_val, f_val
 
@@ -2471,14 +2498,6 @@ def modale_modifica_evento(idx_ev):
           str_lit.toast("Allegato rimosso")
           str_lit.rerun()
 
-  str_lit.markdown("#### 📎 Allegati già caricati")
-  if (str_lit.session_state.get("utente_loggato") or {}).get("ruolo") == "Amministratore":
-    mostra_allegati_esistenti_evento("Cartella privata Admin", "allegati_privati")
-  mostra_allegati_esistenti_evento("Note per tutti", "allegati_tutti")
-  mostra_allegati_esistenti_evento("Note per la sala", "allegati_sala")
-  mostra_allegati_esistenti_evento("Note per la cucina", "allegati_cucina")
-  mostra_allegati_esistenti_evento("Note per il magazzino", "allegati_magazzino")
-
   with str_lit.form(f"form_mod_ev_dialog_{idx_ev}"):
     m_nome = str_lit.text_input(
         "Nome Evento / Cliente", value=ev_mod.get("nome_evento", "")
@@ -2521,23 +2540,26 @@ def modale_modifica_evento(idx_ev):
     def comp_sezione_modifica(titolo_rep, chiave_testo, chiave_all):
       colori_rep = {"Note per tutti": ("#eef5ff", "#cfe0f6"), "Note per la sala": ("#f0f8f2", "#d6eadb"), "Note per la cucina": ("#fff7eb", "#f2dfbd"), "Note per il magazzino": ("#f4f0fa", "#e3d8f0")}
       sfondo_rep, bordo_rep = colori_rep.get(titolo_rep, ("#f7f8fb", "#e5e9f0"))
-      str_lit.markdown(f"<div style='padding:8px 10px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:700;color:#344054;margin:8px 0 4px'>{titolo_rep}</div>", unsafe_allow_html=True)
       t_curr = ev_mod.get(chiave_testo, "")
       a_curr = ev_mod.get(chiave_all, [])
-
-      t_mod = str_lit.text_area(
-          f"Testo - {titolo_rep}",
-          value=t_curr,
-          key=f"dialog_t_{chiave_testo}_{idx_ev}",
-          label_visibility="collapsed",
-      )
-
-      f_aggiunta = str_lit.file_uploader(
-          f"Aggiungi nuovi allegati - {titolo_rep}",
-          accept_multiple_files=True,
-          type=["png", "jpg", "jpeg", "pdf"],
-          key=f"dialog_up_{chiave_testo}_{idx_ev}",
-      )
+      with str_lit.container(border=True):
+        col_titolo, col_file = str_lit.columns([5, 1])
+        with col_titolo:
+          str_lit.markdown(f"<div style='padding:8px 10px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:700;color:#344054'>{titolo_rep}</div>", unsafe_allow_html=True)
+        with col_file:
+          f_aggiunta = str_lit.file_uploader(
+              "📎",
+              accept_multiple_files=True,
+              type=["png", "jpg", "jpeg", "pdf"],
+              key=f"dialog_up_{chiave_testo}_{idx_ev}",
+              label_visibility="collapsed",
+          )
+        t_mod = str_lit.text_area(
+            f"Testo - {titolo_rep}",
+            value=t_curr,
+            key=f"dialog_t_{chiave_testo}_{idx_ev}",
+            label_visibility="collapsed",
+        )
       f_priv_mod = []
       str_lit.markdown("")
       return t_mod, f_aggiunta, a_curr, f_priv_mod
@@ -2624,6 +2646,16 @@ def modale_modifica_evento(idx_ev):
       # Il submit del form provoca già il rerun: non forziamo un secondo
       # rerun, altrimenti la finestra di dialogo si chiude prima della conferma.
       str_lit.session_state[f"eliminazione_evento_in_attesa_{idx_ev}"] = True
+
+  # Gli allegati già presenti vengono mostrati alla fine della pagina, dopo
+  # i dati dell'evento e i quattro blocchi di note.
+  str_lit.markdown("#### 📎 Allegati già caricati · Rimuovi se necessario")
+  if (str_lit.session_state.get("utente_loggato") or {}).get("ruolo") == "Amministratore":
+    mostra_allegati_esistenti_evento("Cartella privata Admin", "allegati_privati")
+  mostra_allegati_esistenti_evento("Note per tutti", "allegati_tutti")
+  mostra_allegati_esistenti_evento("Note per la sala", "allegati_sala")
+  mostra_allegati_esistenti_evento("Note per la cucina", "allegati_cucina")
+  mostra_allegati_esistenti_evento("Note per il magazzino", "allegati_magazzino")
 
 
 if str_lit.session_state.utente_loggato is None:
