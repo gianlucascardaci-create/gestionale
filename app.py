@@ -2053,28 +2053,6 @@ def mostra_noleggi_demo():
                 elif evento.get("id"):
                   str_lit.session_state.noleggio_demo_modifica = evento.get("id")
               str_lit.rerun()
-            # Le righe colorate sopra sono un'anteprima grafica; questi
-            # pulsanti trasparenti rendono invece ogni evento realmente
-            # cliccabile, anche quando nella stessa giornata ce ne sono più di uno.
-            for indice_evento, (tipo_evento, evento) in enumerate(eventi_giornata):
-              if tipo_evento == "noleggio":
-                etichetta_evento = ("🟠 " if evento.get("stato") != "confermato" else "🔵 ") + f"Noleggio · {evento.get('titolo', 'Noleggio')}"
-              else:
-                etichetta_evento = f"🟢 Catering · {evento.get('nome_evento', 'Evento')}"
-              if str_lit.button(
-                  etichetta_evento[:52],
-                  key=f"planner_open_event_{giorno}_{indice_evento}",
-                  use_container_width=True,
-              ):
-                str_lit.session_state.noleggio_demo_giorno_selezionato = giorno
-                str_lit.session_state.eventi_da_scegliere = []
-                str_lit.session_state.noleggio_demo_modifica = None
-                str_lit.session_state.evento_catering_demo_selezionato = None
-                if tipo_evento == "catering":
-                  str_lit.session_state.evento_catering_demo_selezionato = evento
-                elif evento.get("id"):
-                  str_lit.session_state.noleggio_demo_modifica = evento.get("id")
-                str_lit.rerun()
           else:
             str_lit.markdown(f"<div class='planner-static-number'>{giorno.day}</div>", unsafe_allow_html=True)
 
@@ -2366,6 +2344,18 @@ def modale_crea_evento(data_precompilata=None):
 
     str_lit.markdown("---")
     str_lit.markdown("#### 📝 Note e Allegati per Reparto")
+    str_lit.markdown("""
+    <style>
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) {background:#eef5ff!important;border-color:#cfe0f6!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) {background:#f0f8f2!important;border-color:#d6eadb!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) {background:#fff7eb!important;border-color:#f2dfbd!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) {background:#f4f0fa!important;border-color:#e3d8f0!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) [data-testid="stFileUploaderDropzone"] {background:#f8fbff!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) [data-testid="stFileUploaderDropzone"] {background:#f8fcf9!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) [data-testid="stFileUploaderDropzone"] {background:#fffaf2!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) [data-testid="stFileUploaderDropzone"] {background:#faf8fd!important}
+    </style>
+    """, unsafe_allow_html=True)
 
     ruolo_creazione = (str_lit.session_state.get("utente_loggato") or {}).get("ruolo", "")
     f_privati = []
@@ -2378,22 +2368,19 @@ def modale_crea_evento(data_precompilata=None):
       colori_rep = {"Note per tutti": ("#eef5ff", "#cfe0f6"), "Note per la sala": ("#f0f8f2", "#d6eadb"), "Note per la cucina": ("#fff7eb", "#f2dfbd"), "Note per il magazzino": ("#f4f0fa", "#e3d8f0")}
       sfondo_rep, bordo_rep = colori_rep.get(titolo_rep, ("#f7f8fb", "#e5e9f0"))
       with str_lit.container(border=True):
-        col_titolo, col_file = str_lit.columns([5, 1])
-        with col_titolo:
-          str_lit.markdown(f"<div style='padding:8px 10px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:700;color:#344054'>{titolo_rep}</div>", unsafe_allow_html=True)
-        with col_file:
-          f_val = str_lit.file_uploader(
-              "📎",
-              accept_multiple_files=True,
-              type=["png", "jpg", "jpeg", "pdf"],
-              key=f"dialog_crea_{chiave_pref}_f",
-              label_visibility="collapsed",
-          )
+        str_lit.markdown(f"<span class='note-block-marker note-block-{chiave_pref}'></span>", unsafe_allow_html=True)
+        str_lit.markdown(f"<div style='padding:10px 12px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:750;color:#344054;margin-bottom:8px'>{titolo_rep}</div>", unsafe_allow_html=True)
         t_val = str_lit.text_area(
             f"Testo note - {titolo_rep}",
             key=f"dialog_crea_{chiave_pref}_t",
-            label_visibility="collapsed",
+            label_visibility="visible",
             placeholder=f"Inserisci note per {titolo_rep.lower()}...",
+        )
+        f_val = str_lit.file_uploader(
+            f"📎 Aggiungi allegati a {titolo_rep} (facoltativo)",
+            accept_multiple_files=True,
+            type=["png", "jpg", "jpeg", "pdf"],
+            key=f"dialog_crea_{chiave_pref}_f",
         )
       str_lit.markdown("")
       return t_val, f_val
@@ -2532,6 +2519,18 @@ def modale_modifica_evento(idx_ev):
 
     str_lit.markdown("---")
     str_lit.markdown("#### 📝 Modifica Note e Gestione Allegati per Reparto")
+    str_lit.markdown("""
+    <style>
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) {background:#eef5ff!important;border-color:#cfe0f6!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) {background:#f0f8f2!important;border-color:#d6eadb!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) {background:#fff7eb!important;border-color:#f2dfbd!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) {background:#f4f0fa!important;border-color:#e3d8f0!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) [data-testid="stFileUploaderDropzone"] {background:#f8fbff!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) [data-testid="stFileUploaderDropzone"] {background:#f8fcf9!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) [data-testid="stFileUploaderDropzone"] {background:#fffaf2!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) [data-testid="stFileUploaderDropzone"] {background:#faf8fd!important}
+    </style>
+    """, unsafe_allow_html=True)
     mf_priv_mod = []
     if (str_lit.session_state.get("utente_loggato") or {}).get("ruolo") == "Amministratore":
       str_lit.markdown("<div style='padding:8px 10px;border-radius:8px;background:#f4f0fa;border:1px solid #e3d8f0;font-weight:700;color:#344054;margin:8px 0 4px'>Cartella privata Admin</div>", unsafe_allow_html=True)
@@ -2543,22 +2542,19 @@ def modale_modifica_evento(idx_ev):
       t_curr = ev_mod.get(chiave_testo, "")
       a_curr = ev_mod.get(chiave_all, [])
       with str_lit.container(border=True):
-        col_titolo, col_file = str_lit.columns([5, 1])
-        with col_titolo:
-          str_lit.markdown(f"<div style='padding:8px 10px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:700;color:#344054'>{titolo_rep}</div>", unsafe_allow_html=True)
-        with col_file:
-          f_aggiunta = str_lit.file_uploader(
-              "📎",
-              accept_multiple_files=True,
-              type=["png", "jpg", "jpeg", "pdf"],
-              key=f"dialog_up_{chiave_testo}_{idx_ev}",
-              label_visibility="collapsed",
-          )
+        str_lit.markdown(f"<span class='note-block-marker note-block-{chiave_testo.replace('note_', '')}'></span>", unsafe_allow_html=True)
+        str_lit.markdown(f"<div style='padding:10px 12px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:750;color:#344054'>{titolo_rep}</div>", unsafe_allow_html=True)
         t_mod = str_lit.text_area(
             f"Testo - {titolo_rep}",
             value=t_curr,
             key=f"dialog_t_{chiave_testo}_{idx_ev}",
-            label_visibility="collapsed",
+            label_visibility="visible",
+        )
+        f_aggiunta = str_lit.file_uploader(
+            f"📎 Aggiungi allegati a {titolo_rep} (facoltativo)",
+            accept_multiple_files=True,
+            type=["png", "jpg", "jpeg", "pdf"],
+            key=f"dialog_up_{chiave_testo}_{idx_ev}",
         )
       f_priv_mod = []
       str_lit.markdown("")
