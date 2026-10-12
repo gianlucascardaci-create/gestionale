@@ -969,6 +969,68 @@ def dati_allegato_noleggio(noleggio, campo):
   return base64.b64decode(dati_b64) if dati_b64 else b""
 
 
+def lista_allegati_noleggio(noleggio, campo):
+  """Legge più allegati per tipo mantenendo compatibilità col vecchio file singolo."""
+  valore = noleggio.get(campo)
+  if isinstance(valore, list):
+    return valore
+  if isinstance(valore, str) and valore.strip().startswith("["):
+    try:
+      elenco = json.loads(valore)
+      if isinstance(elenco, list):
+        urls = noleggio.get(f"{campo}_url") or ""
+        mimes = noleggio.get(f"{campo}_mime") or ""
+        b64s = noleggio.get(f"{campo}_dati_b64") or ""
+        try: urls = json.loads(urls) if isinstance(urls, str) else urls
+        except Exception: urls = []
+        try: mimes = json.loads(mimes) if isinstance(mimes, str) else mimes
+        except Exception: mimes = []
+        try: b64s = json.loads(b64s) if isinstance(b64s, str) else b64s
+        except Exception: b64s = []
+        return [{
+            "nome_file": str(nome),
+            "url": urls[i] if isinstance(urls, list) and i < len(urls) else "",
+            "mime": mimes[i] if isinstance(mimes, list) and i < len(mimes) else "application/octet-stream",
+            "dati_b64": b64s[i] if isinstance(b64s, list) and i < len(b64s) else "",
+        } for i, nome in enumerate(elenco)]
+    except (TypeError, ValueError, json.JSONDecodeError):
+      pass
+  if not valore or valore == "Nessun file":
+    return []
+  return [{
+      "nome_file": str(valore),
+      "url": noleggio.get(f"{campo}_url") or "",
+      "mime": noleggio.get(f"{campo}_mime") or "application/octet-stream",
+      "dati_b64": noleggio.get(f"{campo}_dati_b64") or "",
+  }]
+
+
+def dati_allegato_noleggio_item(allegato):
+  """Recupera i bytes di un elemento della lista allegati."""
+  url = allegato.get("url") or ""
+  if url:
+    try:
+      risposta = requests.get(url, timeout=15)
+      if risposta.ok:
+        return risposta.content
+    except Exception:
+      pass
+  dati_b64 = allegato.get("dati_b64") or ""
+  try:
+    return base64.b64decode(dati_b64) if dati_b64 else b""
+  except Exception:
+    return b""
+
+
+def salva_lista_allegati_noleggio(noleggio, campo, allegati):
+  """Salva la lista nei campi text esistenti senza richiedere una migrazione SQL."""
+  allegati = allegati or []
+  noleggio[campo] = json.dumps([a.get("nome_file", "allegato") for a in allegati], ensure_ascii=False) if allegati else "Nessun file"
+  noleggio[f"{campo}_url"] = json.dumps([a.get("url", "") for a in allegati], ensure_ascii=False) if allegati else ""
+  noleggio[f"{campo}_mime"] = json.dumps([a.get("mime", "application/octet-stream") for a in allegati], ensure_ascii=False) if allegati else "application/octet-stream"
+  noleggio[f"{campo}_dati_b64"] = json.dumps([a.get("dati_b64", "") for a in allegati], ensure_ascii=False) if allegati else ""
+
+
 def processa_allegati_evento(files):
   """Memorizza negli eventi solo URL Storage, mai il Base64 del file."""
   risultato = []
@@ -1573,6 +1635,7 @@ def modale_crea_noleggio_demo(data_selezionata):
         str_lit.markdown(f"**{etichetta}**")
         return str_lit.file_uploader(
             f"Aggiungi {etichetta} (facoltativo)",
+            accept_multiple_files=True,
             type=["pdf", "jpg", "jpeg", "png"],
             key=f"crea_noleggio_{chiave}",
         )
@@ -1588,13 +1651,16 @@ def modale_crea_noleggio_demo(data_selezionata):
           "id": None, "titolo": titolo, "inizio": datetime.combine(data_inizio, ora_inizio),
           "fine": datetime.combine(data_fine, ora_fine), "stato": "confermato" if stato == "Confermato" else "non confermato",
           "location": location, "referente": referente, "telefono": telefono, "note": note,
-          "bolla": bolla.name if bolla else "Nessun file", "ddt": ddt.name if ddt else "Nessun file", "vario": vario.name if vario else "Nessun file",
-          "bolla_url": salva_allegato_noleggio_su_storage(bolla) if bolla else "",
-          "ddt_url": salva_allegato_noleggio_su_storage(ddt) if ddt else "",
-          "vario_url": salva_allegato_noleggio_su_storage(vario) if vario else "",
-          "bolla_mime": bolla.type if bolla else "application/octet-stream",
-          "ddt_mime": ddt.type if ddt else "application/octet-stream",
-          "vario_mime": vario.type if vario else "application/octet-stream"}
+          "bolla": "Nessun file", "ddt": "Nessun file", "vario": "Nessun file"}
+      for campo, files in (("bolla", bolla), ("ddt", ddt), ("vario", vario)):
+        elenco = []
+        for file in files or []:
+          elenco.append({
+              "nome_file": file.name,
+              "url": salva_allegato_noleggio_su_storage(file),
+              "mime": file.type or "application/octet-stream",
+          })
+        salva_lista_allegati_noleggio(nuovo_noleggio, campo, elenco)
       try:
         if not salva_noleggio_supabase(nuovo_noleggio):
           raise RuntimeError("Supabase non ha restituito il noleggio salvato")
@@ -1648,13 +1714,13 @@ def modale_modifica_noleggio_demo(noleggio_id):
     allegati_magazzino = [("DDT", "ddt"), ("Vario", "vario")]
     presenti = False
     for etichetta, campo in allegati_magazzino:
-      nome = noleggio.get(campo) or "Nessun file"
-      if nome != "Nessun file":
+      for indice_allegato, allegato in enumerate(lista_allegati_noleggio(noleggio, campo)):
+        nome = allegato.get("nome_file") or "allegato"
         presenti = True
-        dati = dati_allegato_noleggio(noleggio, campo)
-        mime = noleggio.get(f"{campo}_mime", "application/octet-stream")
+        dati = dati_allegato_noleggio_item(allegato)
+        mime = allegato.get("mime", "application/octet-stream")
         str_lit.markdown(f"**{etichetta}:** `{nome}`")
-        mostra_download_bytes(nome, mime, dati, f"noleggio_magazzino_{noleggio_id}_{campo}")
+        mostra_download_bytes(nome, mime, dati, f"noleggio_magazzino_{noleggio_id}_{campo}_{indice_allegato}")
     if not presenti:
       str_lit.info("Nessun allegato disponibile.")
     return
@@ -1702,8 +1768,8 @@ def modale_modifica_noleggio_demo(noleggio_id):
         with str_lit.container(border=True):
           str_lit.markdown(f"**{etichetta_upload}**")
           nuovo_file = str_lit.file_uploader(
-              f"Carica un nuovo file per sostituire quello attuale (facoltativo)",
-              accept_multiple_files=False,
+              f"Aggiungi allegati {etichetta_upload} (facoltativo)",
+              accept_multiple_files=True,
               type=["pdf", "jpg", "jpeg", "png"],
               key=f"upload_{campo_upload}_{noleggio_id}",
           )
@@ -1720,22 +1786,20 @@ def modale_modifica_noleggio_demo(noleggio_id):
   if ruolo_corrente in {"Amministratore", "Magazzino2", "Magazzino"}:
     allegati_visibili.extend([("DDT", "ddt"), ("Vario", "vario")])
   for etichetta_allegato, campo_allegato in allegati_visibili:
-    nome_allegato = noleggio.get(campo_allegato) or "Nessun file"
-    with str_lit.container(border=True):
-      str_lit.markdown(f"**{etichetta_allegato}:** `{nome_allegato}`")
-      if nome_allegato != "Nessun file":
-        dati_b64 = dati_allegato_noleggio(noleggio, campo_allegato)
-        mime_allegato = noleggio.get(f"{campo_allegato}_mime", "application/octet-stream")
-        dati_download = dati_b64 if dati_b64 else f"Allegato demo: {nome_allegato}".encode("utf-8")
+    for indice_allegato, allegato in enumerate(lista_allegati_noleggio(noleggio, campo_allegato)):
+      nome_allegato = allegato.get("nome_file") or "allegato"
+      with str_lit.container(border=True):
+        str_lit.markdown(f"**{etichetta_allegato}:** `{nome_allegato}`")
+        dati_download = dati_allegato_noleggio_item(allegato)
+        mime_allegato = allegato.get("mime", "application/octet-stream")
         col_download, col_rimuovi = str_lit.columns([3, 1])
         with col_download:
-          mostra_download_bytes(nome_allegato, mime_allegato, dati_download, f"noleggio_{noleggio_id}_{campo_allegato}")
+          mostra_download_bytes(nome_allegato, mime_allegato, dati_download, f"noleggio_{noleggio_id}_{campo_allegato}_{indice_allegato}")
         with col_rimuovi:
-          if puo_modificare and str_lit.button("Rimuovi", key=f"rimuovi_noleggio_{noleggio_id}_{campo_allegato}", use_container_width=True):
-            noleggio[campo_allegato] = "Nessun file"
-            noleggio[f"{campo_allegato}_url"] = ""
-            noleggio[f"{campo_allegato}_dati_b64"] = ""
-            noleggio[f"{campo_allegato}_mime"] = "application/octet-stream"
+          if puo_modificare and str_lit.button("Rimuovi", key=f"rimuovi_noleggio_{noleggio_id}_{campo_allegato}_{indice_allegato}", use_container_width=True):
+            elenco = lista_allegati_noleggio(noleggio, campo_allegato)
+            elenco.pop(indice_allegato)
+            salva_lista_allegati_noleggio(noleggio, campo_allegato, elenco)
             salva_noleggio_supabase(noleggio)
             str_lit.toast(f"{etichetta_allegato} rimosso")
             str_lit.rerun()
@@ -1744,10 +1808,24 @@ def modale_modifica_noleggio_demo(noleggio_id):
     noleggio.update({"titolo": titolo, "inizio": datetime.combine(data_inizio, ora_inizio), "fine": datetime.combine(data_fine, ora_fine), "location": location, "referente": referente, "telefono": telefono, "note": note, "stato": "confermato" if stato == "Confermato" else "non confermato"})
     for campo_upload, nuovo_file in allegati_modifica.items():
       if nuovo_file is not None:
-        noleggio[campo_upload] = nuovo_file.name
-        noleggio[f"{campo_upload}_url"] = salva_allegato_noleggio_su_storage(nuovo_file)
-        noleggio[f"{campo_upload}_dati_b64"] = ""
-        noleggio[f"{campo_upload}_mime"] = nuovo_file.type or "application/octet-stream"
+        allegati_esistenti = lista_allegati_noleggio(noleggio, campo_upload)
+        nomi_esistenti = {str(a.get("nome_file", "")).strip().lower() for a in allegati_esistenti}
+        hash_esistenti = {str(a.get("sha256", "")) for a in allegati_esistenti if a.get("sha256")}
+        nuovi = nuovo_file if isinstance(nuovo_file, list) else [nuovo_file]
+        for file in nuovi:
+          if not file:
+            continue
+          hash_file = hashlib.sha256(file.getvalue()).hexdigest()
+          if hash_file in hash_esistenti or (not hash_esistenti and file.name.strip().lower() in nomi_esistenti):
+            continue
+          allegati_esistenti.append({
+              "nome_file": file.name,
+              "url": salva_allegato_noleggio_su_storage(file),
+              "mime": file.type or "application/octet-stream",
+              "sha256": hash_file,
+          })
+          hash_esistenti.add(hash_file)
+        salva_lista_allegati_noleggio(noleggio, campo_upload, allegati_esistenti)
     try:
       salva_noleggio_supabase(noleggio)
     except Exception as errore:
@@ -1797,6 +1875,7 @@ def genera_pdf_cartella_privata(evento):
 def mostra_cartella_privata_evento(evento):
   if (str_lit.session_state.get("utente_loggato") or {}).get("ruolo") != "Amministratore":
     return
+  str_lit.markdown("<div style='height:22px'></div>", unsafe_allow_html=True)
   allegati = evento.get("allegati_privati") or []
   str_lit.markdown("<div style='padding:9px 11px;border-radius:8px;background:#e9def7;border:1px solid #c9afe5;font-weight:700;color:#344054;margin:12px 0 5px'>Cartella privata Admin</div>", unsafe_allow_html=True)
   str_lit.caption("Questa sezione è visibile solo all'Amministratore.")
@@ -1808,6 +1887,7 @@ def mostra_cartella_privata_evento(evento):
   if pdf_cartella:
     nome = re.sub(r"[^\w\s-]", "", str(evento.get("nome_evento") or "evento"), flags=re.UNICODE).strip().replace(" ", "_") or "evento"
     str_lit.download_button("📚 Scarica cartella privata PDF multipagina", data=pdf_cartella, file_name=f"Cartella_Privata_{nome}.pdf", mime="application/pdf", key=f"cartella_privata_pdf_{evento.get('id', nome)}", use_container_width=True)
+  str_lit.markdown("<div style='height:22px;border-bottom:1px solid #d0d5dd'></div>", unsafe_allow_html=True)
 
 
 @str_lit.dialog("Dettaglio Evento Catering", width="large")
@@ -1830,9 +1910,10 @@ def modale_catering_da_calendario(evento):
   def mostra_note_calendario(titolo, campo_note, campo_allegati, chiave):
     colori_rep = {"Note per tutti": ("#dcecff", "#9fc5ee"), "Note per la sala": ("#d9f0df", "#a9d6b3"), "Note per la cucina": ("#ffedc7", "#e5bd78"), "Note per il magazzino": ("#e9def7", "#c9afe5")}
     sfondo_rep, bordo_rep = colori_rep.get(titolo, ("#f7f8fb", "#e5e9f0"))
-    str_lit.markdown(f"<div style='padding:8px 10px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:700;color:#344054;margin:8px 0 4px'>{titolo}</div>", unsafe_allow_html=True)
+    str_lit.markdown("<div style='height:22px'></div>", unsafe_allow_html=True)
+    str_lit.markdown(f"<div style='padding:10px 12px;border-radius:9px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:750;color:#344054;margin:0 0 7px'>{titolo}</div>", unsafe_allow_html=True)
     testo_sicuro = html.escape(str(evento.get(campo_note) or f"Nessuna nota per {chiave}.")).replace("\n", "<br>")
-    str_lit.markdown(f"<div style='padding:9px 11px;border-radius:0 0 8px 8px;background:#ffffff;border:1px solid {bordo_rep};border-top:0;color:#344054'>{testo_sicuro}</div>", unsafe_allow_html=True)
+    str_lit.markdown(f"<div style='padding:12px 13px;border-radius:8px;background:#ffffff;border:1px solid #d0d5dd;color:#344054;min-height:42px'>{testo_sicuro}</div>", unsafe_allow_html=True)
     for indice, allegato in enumerate(evento.get(campo_allegati) or []):
       nome_allegato = allegato.get("nome_file", f"allegato_{chiave}_{indice}")
       dati_b64 = allegato.get("dati_b64", "")
@@ -3169,20 +3250,21 @@ else:
               def mostra_sezione_note(titolo, testo, allegati, funzione_colore, prefisso):
                 colori_rep = {"Note per tutti": ("#dcecff", "#9fc5ee"), "Note per la sala": ("#d9f0df", "#a9d6b3"), "Note per la cucina": ("#ffedc7", "#e5bd78"), "Note per il magazzino": ("#e9def7", "#c9afe5")}
                 sfondo_rep, bordo_rep = colori_rep.get(titolo, ("#f7f8fb", "#e5e9f0"))
-                str_lit.markdown(f"<div style='padding:8px 10px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:700;color:#344054;margin:8px 0 4px'>{titolo}</div>", unsafe_allow_html=True)
+                str_lit.markdown("<div style='height:22px'></div>", unsafe_allow_html=True)
+                str_lit.markdown(f"<div style='padding:10px 12px;border-radius:9px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:750;color:#344054;margin:0 0 7px'>{titolo}</div>", unsafe_allow_html=True)
                 testo_sicuro = html.escape(str(testo or "Nessuna nota.")).replace("\n", "<br>")
-                str_lit.markdown(f"<div style='padding:9px 11px;border-radius:0 0 8px 8px;background:#ffffff;border:1px solid {bordo_rep};border-top:0;color:#344054;white-space:normal'>{testo_sicuro}</div>", unsafe_allow_html=True)
+                str_lit.markdown(f"<div style='padding:12px 13px;border-radius:8px;background:#ffffff;border:1px solid #d0d5dd;color:#344054;min-height:42px'>{testo_sicuro}</div>", unsafe_allow_html=True)
                 if allegati:
-                  str_lit.markdown(f"<div style='padding:6px 10px;background:{sfondo_rep};border-left:1px solid {bordo_rep};border-right:1px solid {bordo_rep};color:#344054'>📎 <b>Allegati {titolo.replace('Note per ', '')}:</b></div>", unsafe_allow_html=True)
+                  str_lit.markdown(f"<div style='padding:8px 10px;margin-top:7px;background:#ffffff;border:1px solid #d0d5dd;border-radius:8px;color:#344054'>📎 <b>Allegati {titolo.replace('Note per ', '')}:</b></div>", unsafe_allow_html=True)
                   for att in allegati:
                     mostra_preview_allegato_evento(att, f"{prefisso}_{idx_ev}")
 
+              if is_admin:
+                mostra_cartella_privata_evento(ev)
               mostra_sezione_note(
                   "Note per tutti", ev.get("note_tutti"),
                   ev.get("allegati_tutti") or [], "info", "tutti"
               )
-              if is_admin:
-                mostra_cartella_privata_evento(ev)
 
               if is_admin or is_wedding:
                 mostra_sezione_note(
