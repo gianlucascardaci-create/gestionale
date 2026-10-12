@@ -24,7 +24,15 @@ except ImportError:
 from supabase import create_client, Client
 import requests
 from urllib.parse import quote
+try:
+  from PIL import Image
+except ImportError:
+  Image = None
 
+try:
+  from pypdf import PdfReader, PdfWriter
+except ImportError:
+  PdfReader = PdfWriter = None
 try:
   from reportlab.lib import colors
   from reportlab.lib.pagesizes import letter
@@ -702,9 +710,15 @@ def carica_dati_esterni():
 def carica_eventi_solo_quando_servono():
   """Carica gli eventi solo quando viene aperta una sezione che li usa."""
   try:
-    eventi = supabase.table("eventi_catering").select(
-        "id,nome_evento,data,data_display,location,ospiti,bambini,staff,note_tutti,allegati_tutti,note_sala,allegati_sala,note_cucina,allegati_cucina,note_magazzino,allegati_magazzino"
-    ).order("data").execute().data or []
+    try:
+      risposta = supabase.table("eventi_catering").select(
+          "id,nome_evento,data,data_display,location,ospiti,bambini,staff,note_tutti,allegati_tutti,note_sala,allegati_sala,note_cucina,allegati_cucina,note_magazzino,allegati_magazzino,allegati_privati"
+      ).order("data").execute()
+    except Exception:
+      risposta = supabase.table("eventi_catering").select(
+          "id,nome_evento,data,data_display,location,ospiti,bambini,staff,note_tutti,allegati_tutti,note_sala,allegati_sala,note_cucina,allegati_cucina,note_magazzino,allegati_magazzino"
+      ).order("data").execute()
+    eventi = risposta.data or []
     return [migra_allegati_evento_legacy(evento) for evento in eventi]
   except Exception as e:
     str_lit.error(f"Errore di caricamento eventi da Supabase: {e}")
@@ -741,7 +755,7 @@ def salva_dati_esterni():
           "nome_evento", "data", "data_display", "location", "ospiti",
           "bambini", "staff", "note_tutti", "allegati_tutti", "note_sala",
           "allegati_sala", "note_cucina", "allegati_cucina",
-          "note_magazzino", "allegati_magazzino")}
+          "note_magazzino", "allegati_magazzino", "allegati_privati")}
       payload = {k: v for k, v in payload.items() if v is not None}
       if ev.get("id"):
         res = supabase.table("eventi_catering").update(payload).eq("id", ev["id"]).execute()
@@ -779,7 +793,7 @@ def salva_evento_singolo(ev):
         "nome_evento", "data", "data_display", "location", "ospiti",
         "bambini", "staff", "note_tutti", "allegati_tutti", "note_sala",
         "allegati_sala", "note_cucina", "allegati_cucina",
-        "note_magazzino", "allegati_magazzino")}
+        "note_magazzino", "allegati_magazzino", "allegati_privati")}
     payload = {k: v for k, v in payload.items() if v is not None}
     if ev.get("id"):
       res = supabase.table("eventi_catering").update(payload).eq("id", ev["id"]).execute()
@@ -950,41 +964,50 @@ def dati_allegato_evento(allegato):
   return base64.b64decode(dati_b64) if dati_b64 else b""
 
 
-def mostra_preview_allegato_evento(allegato, chiave):
-  """Apre l'allegato in anteprima; il download è disponibile solo dopo."""
-  nome_file = str(allegato.get("nome_file") or "allegato")
-  mime = str(allegato.get("mime") or "application/octet-stream")
+def mostra_preview_bytes(nome_file, mime, dati, chiave):
+  """Anteprima affidabile per immagini/PDF, con download solo dopo l'apertura."""
+  nome_file = str(nome_file or "allegato")
+  mime = str(mime or "application/octet-stream")
   if mime == "application/octet-stream" and "." in nome_file:
     estensione = nome_file.lower().rsplit(".", 1)[-1]
     mime = {"pdf": "application/pdf", "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg"}.get(estensione, mime)
+  if not dati:
+    str_lit.warning(f"Anteprima non disponibile per {nome_file}.")
+    return
   preview_key = f"{chiave}:{nome_file}"
   if str_lit.button(f"👁️ Apri anteprima · {nome_file}", key=f"apri_anteprima_{chiave}_{nome_file}", use_container_width=True):
-    dati = dati_allegato_evento(allegato)
-    if dati:
-      str_lit.session_state.anteprima_allegato_evento = {"chiave": preview_key, "mime": mime, "nome_file": nome_file, "dati_b64": base64.b64encode(dati).decode("ascii")}
-      str_lit.rerun()
-    else:
-      str_lit.warning(f"Anteprima non disponibile per {nome_file}.")
+    str_lit.session_state.anteprima_allegato_evento = {"chiave": preview_key, "mime": mime, "nome_file": nome_file, "dati_b64": base64.b64encode(dati).decode("ascii")}
+    str_lit.rerun()
   anteprima = str_lit.session_state.get("anteprima_allegato_evento") or {}
-  if anteprima.get("chiave") == preview_key:
-    dati_b64 = anteprima.get("dati_b64", "")
-    if mime.startswith("image/"):
-      contenuto = f'<img src="data:{mime};base64,{dati_b64}" style="max-width:100%;max-height:360px;object-fit:contain;border-radius:10px;background:#f8fafc;padding:8px;">'
-      altezza = 380
-    elif mime == "application/pdf":
-      contenuto = f'<iframe src="data:application/pdf;base64,{dati_b64}" style="width:100%;height:380px;border:1px solid #d0d5dd;border-radius:10px;background:white;"></iframe>'
-      altezza = 400
+  if anteprima.get("chiave") != preview_key:
+    return
+  dati_preview = base64.b64decode(anteprima.get("dati_b64", ""))
+  if mime.startswith("image/"):
+    str_lit.image(dati_preview, caption=nome_file, use_container_width=True)
+  elif mime == "application/pdf":
+    if convert_from_bytes:
+      try:
+        pagina = convert_from_bytes(dati_preview, dpi=110, first_page=1, last_page=1)[0]
+        str_lit.image(pagina, caption=f"Anteprima prima pagina · {nome_file}", use_container_width=True)
+      except Exception:
+        str_lit.info("Il PDF è stato caricato ma non è possibile renderizzare la prima pagina.")
     else:
-      contenuto = '<div style="padding:24px;font:600 14px Arial;color:#344054;background:#f8fafc;border-radius:10px;">Anteprima non disponibile per questo formato.</div>'
-      altezza = 80
-    components.html(f'<div style="padding:4px 0;">{contenuto}</div>', height=altezza, scrolling=False)
-    col_preview_1, col_preview_2 = str_lit.columns([3, 1])
-    with col_preview_1:
-      str_lit.download_button("📥 Scarica allegato", data=base64.b64decode(dati_b64), file_name=nome_file, mime=mime, key=f"download_preview_{chiave}_{nome_file}", use_container_width=True)
-    with col_preview_2:
-      if str_lit.button("Chiudi", key=f"chiudi_anteprima_{chiave}_{nome_file}", use_container_width=True):
-        str_lit.session_state.anteprima_allegato_evento = None
-        str_lit.rerun()
+      str_lit.info("Anteprima PDF non disponibile in questa installazione.")
+  else:
+    str_lit.info("Anteprima non disponibile per questo formato.")
+  col_preview_1, col_preview_2 = str_lit.columns([3, 1])
+  with col_preview_1:
+    str_lit.download_button("📥 Scarica allegato", data=dati_preview, file_name=nome_file, mime=mime, key=f"download_preview_{chiave}_{nome_file}", use_container_width=True)
+  with col_preview_2:
+    if str_lit.button("Chiudi", key=f"chiudi_anteprima_{chiave}_{nome_file}", use_container_width=True):
+      str_lit.session_state.anteprima_allegato_evento = None
+      str_lit.rerun()
+
+
+def mostra_preview_allegato_evento(allegato, chiave):
+  nome_file = str(allegato.get("nome_file") or "allegato")
+  dati = dati_allegato_evento(allegato)
+  mostra_preview_bytes(nome_file, allegato.get("mime", "application/octet-stream"), dati, chiave)
 
 
 def migra_allegati_evento_legacy(evento):
@@ -1558,14 +1581,7 @@ def modale_modifica_noleggio_demo(noleggio_id):
         dati = dati_allegato_noleggio(noleggio, campo)
         mime = noleggio.get(f"{campo}_mime", "application/octet-stream")
         str_lit.markdown(f"**{etichetta}:** `{nome}`")
-        str_lit.download_button(
-            f"📥 Scarica allegato {etichetta}",
-            data=dati if dati else f"Allegato: {nome}".encode("utf-8"),
-            file_name=nome,
-            mime=mime,
-            key=f"magazzino_download_{noleggio_id}_{campo}",
-            use_container_width=True,
-        )
+        mostra_preview_bytes(nome, mime, dati, f"noleggio_magazzino_{noleggio_id}_{campo}")
     if not presenti:
       str_lit.info("Nessun allegato disponibile.")
     return
@@ -1653,7 +1669,7 @@ def modale_modifica_noleggio_demo(noleggio_id):
         dati_b64 = dati_allegato_noleggio(noleggio, campo_allegato)
         mime_allegato = noleggio.get(f"{campo_allegato}_mime", "application/octet-stream")
         dati_download = dati_b64 if dati_b64 else f"Allegato demo: {nome_allegato}".encode("utf-8")
-        str_lit.download_button("📥 Scarica allegato", data=dati_download, file_name=nome_allegato, mime=mime_allegato, key=f"scarica_demo_{noleggio_id}_{campo_allegato}", use_container_width=True)
+        mostra_preview_bytes(nome_allegato, mime_allegato, dati_download, f"noleggio_{noleggio_id}_{campo_allegato}")
 
   if salva:
     noleggio.update({"titolo": titolo, "inizio": datetime.combine(data_inizio, ora_inizio), "fine": datetime.combine(data_fine, ora_fine), "location": location, "referente": referente, "telefono": telefono, "note": note, "stato": "confermato" if stato == "Confermato" else "non confermato"})
@@ -1679,6 +1695,55 @@ def modale_modifica_noleggio_demo(noleggio_id):
   if puo_modificare and elimina_richiesto:
     str_lit.session_state.noleggio_demo_eliminazione_in_attesa = noleggio_id
     str_lit.rerun()
+
+
+def genera_pdf_cartella_privata(evento):
+  """Unisce PDF e immagini della cartella privata in un unico PDF multipagina."""
+  if not REPORTLAB_DISPONIBILE or PdfWriter is None or PdfReader is None:
+    return b""
+  writer = PdfWriter()
+  allegati = evento.get("allegati_privati") or []
+  for allegato in allegati:
+    dati = dati_allegato_evento(allegato)
+    if not dati:
+      continue
+    mime = allegato.get("mime", "application/octet-stream")
+    nome = allegato.get("nome_file", "allegato")
+    try:
+      if mime == "application/pdf" or str(nome).lower().endswith(".pdf"):
+        reader = PdfReader(BytesIO(dati))
+        for pagina in reader.pages:
+          writer.add_page(pagina)
+      else:
+        immagine = Image.open(BytesIO(dati)).convert("RGB")
+        pagina_buffer = BytesIO()
+        immagine.save(pagina_buffer, format="PDF")
+        reader = PdfReader(BytesIO(pagina_buffer.getvalue()))
+        for pagina in reader.pages:
+          writer.add_page(pagina)
+    except Exception:
+      continue
+  if not writer.pages:
+    return b""
+  risultato = BytesIO()
+  writer.write(risultato)
+  return risultato.getvalue()
+
+
+def mostra_cartella_privata_evento(evento):
+  if (str_lit.session_state.get("utente_loggato") or {}).get("ruolo") != "Amministratore":
+    return
+  allegati = evento.get("allegati_privati") or []
+  str_lit.markdown("<div style='padding:9px 11px;border-radius:8px;background:#f4f0fa;border:1px solid #e3d8f0;font-weight:700;color:#344054;margin:12px 0 5px'>Cartella privata Admin</div>", unsafe_allow_html=True)
+  str_lit.caption("Questa sezione è visibile solo all'Amministratore.")
+  if not allegati:
+    str_lit.info("Nessun documento privato inserito.")
+    return
+  str_lit.write(" · ".join(str(a.get("nome_file") or "Allegato") for a in allegati))
+  pdf_cartella = genera_pdf_cartella_privata(evento)
+  if pdf_cartella:
+    nome = re.sub(r"[^\w\s-]", "", str(evento.get("nome_evento") or "evento"), flags=re.UNICODE).strip().replace(" ", "_") or "evento"
+    str_lit.download_button("📚 Scarica cartella privata PDF multipagina", data=pdf_cartella, file_name=f"Cartella_Privata_{nome}.pdf", mime="application/pdf", key=f"cartella_privata_pdf_{evento.get('id', nome)}", use_container_width=True)
 
 
 @str_lit.dialog("Dettaglio Evento Catering", width="large")
@@ -1715,15 +1780,10 @@ def modale_catering_da_calendario(evento):
           pass
       if not dati_allegato and dati_b64:
         dati_allegato = base64.b64decode(dati_b64)
-      str_lit.download_button(
-          f"📥 Scarica allegato: {nome_allegato}",
-          data=dati_allegato,
-          file_name=nome_allegato,
-          mime=mime_allegato,
-          key=f"calendario_{chiave}_{evento.get('id', evento.get('nome_evento', 'evento'))}_{indice}",
-      )
+      mostra_preview_bytes(nome_allegato, mime_allegato, dati_allegato, f"calendario_{chiave}_{evento.get('id', evento.get('nome_evento', 'evento'))}_{indice}")
 
   mostra_note_calendario("Note per tutti", "note_tutti", "allegati_tutti", "tutti")
+  mostra_cartella_privata_evento(evento)
   sezioni_visibili = {
       "Amministratore": [("Note per la sala", "note_sala", "allegati_sala", "sala"), ("Note per la cucina", "note_cucina", "allegati_cucina", "cucina"), ("Note per il magazzino", "note_magazzino", "allegati_magazzino", "magazzino")],
       "Wedding": [("Note per la sala", "note_sala", "allegati_sala", "sala"), ("Note per la cucina", "note_cucina", "allegati_cucina", "cucina"), ("Note per il magazzino", "note_magazzino", "allegati_magazzino", "magazzino")],
@@ -2025,12 +2085,12 @@ if codice_scansionato:
       .qr-quantity-value{{font-size:2rem;font-weight:850;line-height:1.05;margin-top:2px}}
       .qr-note{{background:#f3f8ff;border:1px solid #d7e7fa;border-radius:10px;padding:10px 13px;margin-top:6px;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;line-height:1.4;font-size:.82rem;max-height:82px;overflow:auto}}
       .qr-tech-title{{font-size:.63rem;text-transform:uppercase;letter-spacing:.1em;color:#083278;font-weight:800;margin-top:11px}}
-      .qr-tech-grid{{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;min-width:0}}
+      .qr-tech-grid{{display:grid;grid-template-columns:1fr;gap:8px;margin-top:6px;min-width:0}}
       .qr-tech-item{{font-size:.78rem;color:#667085;line-height:1.35;min-width:0;overflow-wrap:anywhere;word-break:break-word;background:#f3f8ff;border:1px solid #d7e7fa;border-radius:10px;padding:9px 11px;max-height:76px;overflow:auto}}
       .qr-tech-item span{{display:block;font-size:.58rem;text-transform:uppercase;letter-spacing:.04em;color:#7890ac}}
       .qr-tech-item b{{font-weight:650;color:#344054;display:block;margin-top:4px}}
       .qr-info{{min-width:0;overflow:hidden}}
-      @media(max-width:640px){{.qr-screen{{height:auto;min-height:calc(100vh - 24px);align-items:flex-start;padding-top:8px;overflow:visible}}.qr-card{{grid-template-columns:1fr;gap:12px;padding:14px 16px;border-radius:14px}}.qr-photo,.qr-no-photo{{height:175px}}.qr-title{{font-size:1.2rem}}.qr-quantity{{padding:9px 13px;margin:6px 0 8px}}.qr-quantity-value{{font-size:1.75rem}}.qr-note{{font-size:.8rem;padding:8px 11px;max-height:110px}}.qr-tech-grid{{grid-template-columns:1fr 1fr}}.qr-tech-item{{font-size:.8rem}}}}
+      @media(max-width:640px){{.qr-screen{{height:auto;min-height:calc(100vh - 24px);align-items:flex-start;padding-top:8px;overflow:visible}}.qr-card{{grid-template-columns:1fr;gap:12px;padding:14px 16px;border-radius:14px}}.qr-photo,.qr-no-photo{{height:175px}}.qr-title{{font-size:1.2rem}}.qr-quantity{{padding:9px 13px;margin:6px 0 8px}}.qr-quantity-value{{font-size:1.75rem}}.qr-note{{font-size:.8rem;padding:8px 11px;max-height:110px}}.qr-tech-grid{{grid-template-columns:1fr}}.qr-tech-item{{font-size:.8rem}}}}
     </style>
     <div class="qr-screen"><div class="qr-card">
       <div>{foto_html}</div><div class="qr-info">
@@ -2237,6 +2297,12 @@ def modale_crea_evento(data_precompilata=None):
     t_sala, f_sala = comp_sezione_creazione("Note per la sala", "sala")
     t_cucina, f_cucina = comp_sezione_creazione("Note per la cucina", "cucina")
     t_mag, f_mag = comp_sezione_creazione("Note per il magazzino", "magazzino")
+    ruolo_creazione = (str_lit.session_state.get("utente_loggato") or {}).get("ruolo", "")
+    f_privati = []
+    if ruolo_creazione == "Amministratore":
+      str_lit.markdown("<div style='padding:9px 11px;border-radius:8px;background:#f4f0fa;border:1px solid #e3d8f0;font-weight:700;color:#344054;margin:10px 0 4px'>Cartella privata Admin</div>", unsafe_allow_html=True)
+      str_lit.caption("Visibile solo all'Amministratore e scaricabile come unico PDF multipagina.")
+      f_privati = str_lit.file_uploader("Allegati privati dell'evento", accept_multiple_files=True, type=["png", "jpg", "jpeg", "pdf"], key="dialog_crea_privati_f")
 
     if str_lit.form_submit_button(
         "💾 Salva e Registra Evento", type="primary", use_container_width=True
@@ -2265,6 +2331,7 @@ def modale_crea_evento(data_precompilata=None):
             "allegati_cucina": process_files(f_cucina),
             "note_magazzino": t_mag,
             "allegati_magazzino": process_files(f_mag),
+            "allegati_privati": process_files(f_privati) if ruolo_creazione == "Amministratore" else [],
         }
         str_lit.session_state.eventi_catering.append(nuovo_ev)
         destinatari_nuovo_evento = ["Sala", "Cucina", "Magazzino"]
@@ -2338,6 +2405,8 @@ def modale_modifica_evento(idx_ev):
   mostra_allegati_esistenti_evento("Note per la sala", "allegati_sala")
   mostra_allegati_esistenti_evento("Note per la cucina", "allegati_cucina")
   mostra_allegati_esistenti_evento("Note per il magazzino", "allegati_magazzino")
+  if (str_lit.session_state.get("utente_loggato") or {}).get("ruolo") == "Amministratore":
+    mostra_allegati_esistenti_evento("Cartella privata Admin", "allegati_privati")
 
   with str_lit.form(f"form_mod_ev_dialog_{idx_ev}"):
     m_nome = str_lit.text_input(
@@ -2394,19 +2463,23 @@ def modale_modifica_evento(idx_ev):
           type=["png", "jpg", "jpeg", "pdf"],
           key=f"dialog_up_{chiave_testo}_{idx_ev}",
       )
+      if titolo_rep == "Note per il magazzino" and (str_lit.session_state.get("utente_loggato") or {}).get("ruolo") == "Amministratore":
+        f_priv_mod = str_lit.file_uploader("Aggiungi allegati alla Cartella privata Admin", accept_multiple_files=True, type=["png", "jpg", "jpeg", "pdf"], key=f"dialog_up_privati_{idx_ev}")
+      else:
+        f_priv_mod = []
       str_lit.markdown("")
-      return t_mod, f_aggiunta, a_curr
+      return t_mod, f_aggiunta, a_curr, f_priv_mod
 
-    mt_tutti, mf_tutti, curr_tutti = comp_sezione_modifica(
+    mt_tutti, mf_tutti, curr_tutti, _ = comp_sezione_modifica(
         "Note per tutti", "note_tutti", "allegati_tutti"
     )
-    mt_sala, mf_sala, curr_sala = comp_sezione_modifica(
+    mt_sala, mf_sala, curr_sala, _ = comp_sezione_modifica(
         "Note per la sala", "note_sala", "allegati_sala"
     )
-    mt_cucina, mf_cucina, curr_cucina = comp_sezione_modifica(
+    mt_cucina, mf_cucina, curr_cucina, _ = comp_sezione_modifica(
         "Note per la cucina", "note_cucina", "allegati_cucina"
     )
-    mt_mag, mf_mag, curr_mag = comp_sezione_modifica(
+    mt_mag, mf_mag, curr_mag, mf_priv_mod = comp_sezione_modifica(
         "Note per il magazzino", "note_magazzino", "allegati_magazzino"
     )
 
@@ -2458,6 +2531,9 @@ def modale_modifica_evento(idx_ev):
           "note_magazzino": mt_mag,
           "allegati_magazzino": filtra_e_unisci_allegati(
               curr_mag, mf_mag, "note_magazzino"
+          ),
+          "allegati_privati": filtra_e_unisci_allegati(
+              ev_mod.get("allegati_privati") or [], mf_priv_mod, "allegati_privati"
           ),
       })
       if mt_tutti.strip():
@@ -3024,6 +3100,8 @@ else:
                   "Note per tutti", ev.get("note_tutti"),
                   ev.get("allegati_tutti") or [], "info", "tutti"
               )
+              if is_admin:
+                mostra_cartella_privata_evento(ev)
 
               if is_admin or is_wedding:
                 mostra_sezione_note(
