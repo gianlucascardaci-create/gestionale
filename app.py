@@ -1037,7 +1037,41 @@ def mostra_preview_bytes(nome_file, mime, dati, chiave):
 def mostra_preview_allegato_evento(allegato, chiave):
   nome_file = str(allegato.get("nome_file") or "allegato")
   dati = dati_allegato_evento(allegato)
-  mostra_preview_bytes(nome_file, allegato.get("mime", "application/octet-stream"), dati, chiave)
+  mime = allegato.get("mime", "application/octet-stream")
+  if not dati:
+    str_lit.warning(f"Allegato non disponibile: {nome_file}")
+    return
+  if mime == "application/octet-stream" and "." in nome_file:
+    estensione = nome_file.lower().rsplit(".", 1)[-1]
+    mime = {"pdf": "application/pdf", "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg"}.get(estensione, mime)
+  str_lit.download_button(
+      f"📥 Scarica {nome_file}",
+      data=dati,
+      file_name=nome_file,
+      mime=mime,
+      key=f"download_evento_{chiave}_{nome_file}",
+      use_container_width=True,
+  )
+
+
+def mostra_download_bytes(nome_file, mime, dati, chiave):
+  """Mostra soltanto il download dell'allegato, senza anteprima PDF."""
+  nome_file = str(nome_file or "allegato")
+  mime = str(mime or "application/octet-stream")
+  if mime == "application/octet-stream" and "." in nome_file:
+    estensione = nome_file.lower().rsplit(".", 1)[-1]
+    mime = {"pdf": "application/pdf", "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg"}.get(estensione, mime)
+  if not dati:
+    str_lit.warning(f"Allegato non disponibile: {nome_file}")
+    return
+  str_lit.download_button(
+      f"📥 Scarica {nome_file}",
+      data=dati,
+      file_name=nome_file,
+      mime=mime,
+      key=f"download_solo_{chiave}_{nome_file}",
+      use_container_width=True,
+  )
 
 
 def migra_allegati_evento_legacy(evento):
@@ -1586,7 +1620,7 @@ def modale_modifica_noleggio_demo(noleggio_id):
   )
   if not puo_modificare:
     str_lit.info("Modalità sola visualizzazione.")
-  if is_magazzino1:
+  if not puo_modificare:
     stato_testo = "Confermato" if noleggio.get("stato") == "confermato" else "Non confermato"
     colore_stato = "success" if noleggio.get("stato") == "confermato" else "warning"
     str_lit.markdown(f"## {noleggio.get('titolo', 'Noleggio')}")
@@ -1615,7 +1649,7 @@ def modale_modifica_noleggio_demo(noleggio_id):
         dati = dati_allegato_noleggio(noleggio, campo)
         mime = noleggio.get(f"{campo}_mime", "application/octet-stream")
         str_lit.markdown(f"**{etichetta}:** `{nome}`")
-        mostra_preview_bytes(nome, mime, dati, f"noleggio_magazzino_{noleggio_id}_{campo}")
+        mostra_download_bytes(nome, mime, dati, f"noleggio_magazzino_{noleggio_id}_{campo}")
     if not presenti:
       str_lit.info("Nessun allegato disponibile.")
     return
@@ -1703,7 +1737,7 @@ def modale_modifica_noleggio_demo(noleggio_id):
         dati_b64 = dati_allegato_noleggio(noleggio, campo_allegato)
         mime_allegato = noleggio.get(f"{campo_allegato}_mime", "application/octet-stream")
         dati_download = dati_b64 if dati_b64 else f"Allegato demo: {nome_allegato}".encode("utf-8")
-        mostra_preview_bytes(nome_allegato, mime_allegato, dati_download, f"noleggio_{noleggio_id}_{campo_allegato}")
+        mostra_download_bytes(nome_allegato, mime_allegato, dati_download, f"noleggio_{noleggio_id}_{campo_allegato}")
 
   if salva:
     noleggio.update({"titolo": titolo, "inizio": datetime.combine(data_inizio, ora_inizio), "fine": datetime.combine(data_fine, ora_fine), "location": location, "referente": referente, "telefono": telefono, "note": note, "stato": "confermato" if stato == "Confermato" else "non confermato"})
@@ -1798,8 +1832,11 @@ def modale_catering_da_calendario(evento):
     str_lit.markdown(f"**Staff:** {evento.get('staff', 0)}")
   str_lit.markdown("---")
   def mostra_note_calendario(titolo, campo_note, campo_allegati, chiave):
-    str_lit.markdown(f"### {titolo}")
-    str_lit.info(evento.get(campo_note) or f"Nessuna nota per {chiave}.")
+    colori_rep = {"Note per tutti": ("#eef5ff", "#cfe0f6"), "Note per la sala": ("#f0f8f2", "#d6eadb"), "Note per la cucina": ("#fff7eb", "#f2dfbd"), "Note per il magazzino": ("#f4f0fa", "#e3d8f0")}
+    sfondo_rep, bordo_rep = colori_rep.get(titolo, ("#f7f8fb", "#e5e9f0"))
+    str_lit.markdown(f"<div style='padding:8px 10px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:700;color:#344054;margin:8px 0 4px'>{titolo}</div>", unsafe_allow_html=True)
+    testo_sicuro = html.escape(str(evento.get(campo_note) or f"Nessuna nota per {chiave}.")).replace("\n", "<br>")
+    str_lit.markdown(f"<div style='padding:9px 11px;border-radius:0 0 8px 8px;background:{sfondo_rep};border:1px solid {bordo_rep};border-top:0;color:#344054'>{testo_sicuro}</div>", unsafe_allow_html=True)
     for indice, allegato in enumerate(evento.get(campo_allegati) or []):
       nome_allegato = allegato.get("nome_file", f"allegato_{chiave}_{indice}")
       dati_b64 = allegato.get("dati_b64", "")
@@ -1814,10 +1851,10 @@ def modale_catering_da_calendario(evento):
           pass
       if not dati_allegato and dati_b64:
         dati_allegato = base64.b64decode(dati_b64)
-      mostra_preview_bytes(nome_allegato, mime_allegato, dati_allegato, f"calendario_{chiave}_{evento.get('id', evento.get('nome_evento', 'evento'))}_{indice}")
+      mostra_download_bytes(nome_allegato, mime_allegato, dati_allegato, f"calendario_{chiave}_{evento.get('id', evento.get('nome_evento', 'evento'))}_{indice}")
 
-  mostra_note_calendario("Note per tutti", "note_tutti", "allegati_tutti", "tutti")
   mostra_cartella_privata_evento(evento)
+  mostra_note_calendario("Note per tutti", "note_tutti", "allegati_tutti", "tutti")
   sezioni_visibili = {
       "Amministratore": [("Note per la sala", "note_sala", "allegati_sala", "sala"), ("Note per la cucina", "note_cucina", "allegati_cucina", "cucina"), ("Note per il magazzino", "note_magazzino", "allegati_magazzino", "magazzino")],
       "Wedding": [("Note per la sala", "note_sala", "allegati_sala", "sala"), ("Note per la cucina", "note_cucina", "allegati_cucina", "cucina"), ("Note per il magazzino", "note_magazzino", "allegati_magazzino", "magazzino")],
@@ -2013,7 +2050,7 @@ def mostra_noleggi_demo():
                 tipo_evento, evento = eventi_giornata[0]
                 if tipo_evento == "catering":
                   str_lit.session_state.evento_catering_demo_selezionato = evento
-                elif not (evento.get("stato") != "confermato" and ruolo == "Magazzino"):
+                elif evento.get("id"):
                   str_lit.session_state.noleggio_demo_modifica = evento.get("id")
               str_lit.rerun()
           else:
@@ -2027,7 +2064,7 @@ def mostra_noleggi_demo():
       if str_lit.button(testo, key=f"planner_choice_{indice}", use_container_width=True):
         if tipo_evento == "catering":
           str_lit.session_state.evento_catering_demo_selezionato = evento
-        elif not (evento.get("stato") != "confermato" and ruolo == "Magazzino"):
+        elif evento.get("id"):
           str_lit.session_state.noleggio_demo_modifica = evento.get("id")
         str_lit.session_state.eventi_da_scegliere = []
         str_lit.rerun()
@@ -2308,6 +2345,13 @@ def modale_crea_evento(data_precompilata=None):
     str_lit.markdown("---")
     str_lit.markdown("#### 📝 Note e Allegati per Reparto")
 
+    ruolo_creazione = (str_lit.session_state.get("utente_loggato") or {}).get("ruolo", "")
+    f_privati = []
+    if ruolo_creazione == "Amministratore":
+      str_lit.markdown("<div style='padding:9px 11px;border-radius:8px;background:#f4f0fa;border:1px solid #e3d8f0;font-weight:700;color:#344054;margin:10px 0 4px'>Cartella privata Admin</div>", unsafe_allow_html=True)
+      str_lit.caption("Visibile solo all'Amministratore e scaricabile come unico PDF multipagina.")
+      f_privati = str_lit.file_uploader("Allegati privati dell'evento", accept_multiple_files=True, type=["png", "jpg", "jpeg", "pdf"], key="dialog_crea_privati_f")
+
     def comp_sezione_creazione(titolo_rep, chiave_pref):
       colori_rep = {"Note per tutti": ("#eef5ff", "#cfe0f6"), "Note per la sala": ("#f0f8f2", "#d6eadb"), "Note per la cucina": ("#fff7eb", "#f2dfbd"), "Note per il magazzino": ("#f4f0fa", "#e3d8f0")}
       sfondo_rep, bordo_rep = colori_rep.get(titolo_rep, ("#f7f8fb", "#e5e9f0"))
@@ -2331,13 +2375,6 @@ def modale_crea_evento(data_precompilata=None):
     t_sala, f_sala = comp_sezione_creazione("Note per la sala", "sala")
     t_cucina, f_cucina = comp_sezione_creazione("Note per la cucina", "cucina")
     t_mag, f_mag = comp_sezione_creazione("Note per il magazzino", "magazzino")
-    ruolo_creazione = (str_lit.session_state.get("utente_loggato") or {}).get("ruolo", "")
-    f_privati = []
-    if ruolo_creazione == "Amministratore":
-      str_lit.markdown("<div style='padding:9px 11px;border-radius:8px;background:#f4f0fa;border:1px solid #e3d8f0;font-weight:700;color:#344054;margin:10px 0 4px'>Cartella privata Admin</div>", unsafe_allow_html=True)
-      str_lit.caption("Visibile solo all'Amministratore e scaricabile come unico PDF multipagina.")
-      f_privati = str_lit.file_uploader("Allegati privati dell'evento", accept_multiple_files=True, type=["png", "jpg", "jpeg", "pdf"], key="dialog_crea_privati_f")
-
     if str_lit.form_submit_button(
         "💾 Salva e Registra Evento", type="primary", use_container_width=True
     ):
@@ -2435,12 +2472,12 @@ def modale_modifica_evento(idx_ev):
           str_lit.rerun()
 
   str_lit.markdown("#### 📎 Allegati già caricati")
+  if (str_lit.session_state.get("utente_loggato") or {}).get("ruolo") == "Amministratore":
+    mostra_allegati_esistenti_evento("Cartella privata Admin", "allegati_privati")
   mostra_allegati_esistenti_evento("Note per tutti", "allegati_tutti")
   mostra_allegati_esistenti_evento("Note per la sala", "allegati_sala")
   mostra_allegati_esistenti_evento("Note per la cucina", "allegati_cucina")
   mostra_allegati_esistenti_evento("Note per il magazzino", "allegati_magazzino")
-  if (str_lit.session_state.get("utente_loggato") or {}).get("ruolo") == "Amministratore":
-    mostra_allegati_esistenti_evento("Cartella privata Admin", "allegati_privati")
 
   with str_lit.form(f"form_mod_ev_dialog_{idx_ev}"):
     m_nome = str_lit.text_input(
@@ -2476,6 +2513,10 @@ def modale_modifica_evento(idx_ev):
 
     str_lit.markdown("---")
     str_lit.markdown("#### 📝 Modifica Note e Gestione Allegati per Reparto")
+    mf_priv_mod = []
+    if (str_lit.session_state.get("utente_loggato") or {}).get("ruolo") == "Amministratore":
+      str_lit.markdown("<div style='padding:8px 10px;border-radius:8px;background:#f4f0fa;border:1px solid #e3d8f0;font-weight:700;color:#344054;margin:8px 0 4px'>Cartella privata Admin</div>", unsafe_allow_html=True)
+      mf_priv_mod = str_lit.file_uploader("Aggiungi allegati alla Cartella privata Admin", accept_multiple_files=True, type=["png", "jpg", "jpeg", "pdf"], key=f"dialog_up_privati_{idx_ev}")
 
     def comp_sezione_modifica(titolo_rep, chiave_testo, chiave_all):
       colori_rep = {"Note per tutti": ("#eef5ff", "#cfe0f6"), "Note per la sala": ("#f0f8f2", "#d6eadb"), "Note per la cucina": ("#fff7eb", "#f2dfbd"), "Note per il magazzino": ("#f4f0fa", "#e3d8f0")}
@@ -2497,10 +2538,7 @@ def modale_modifica_evento(idx_ev):
           type=["png", "jpg", "jpeg", "pdf"],
           key=f"dialog_up_{chiave_testo}_{idx_ev}",
       )
-      if titolo_rep == "Note per il magazzino" and (str_lit.session_state.get("utente_loggato") or {}).get("ruolo") == "Amministratore":
-        f_priv_mod = str_lit.file_uploader("Aggiungi allegati alla Cartella privata Admin", accept_multiple_files=True, type=["png", "jpg", "jpeg", "pdf"], key=f"dialog_up_privati_{idx_ev}")
-      else:
-        f_priv_mod = []
+      f_priv_mod = []
       str_lit.markdown("")
       return t_mod, f_aggiunta, a_curr, f_priv_mod
 
@@ -2513,7 +2551,7 @@ def modale_modifica_evento(idx_ev):
     mt_cucina, mf_cucina, curr_cucina, _ = comp_sezione_modifica(
         "Note per la cucina", "note_cucina", "allegati_cucina"
     )
-    mt_mag, mf_mag, curr_mag, mf_priv_mod = comp_sezione_modifica(
+    mt_mag, mf_mag, curr_mag, _ = comp_sezione_modifica(
         "Note per il magazzino", "note_magazzino", "allegati_magazzino"
     )
 
@@ -3124,9 +3162,10 @@ else:
                 colori_rep = {"Note per tutti": ("#eef5ff", "#cfe0f6"), "Note per la sala": ("#f0f8f2", "#d6eadb"), "Note per la cucina": ("#fff7eb", "#f2dfbd"), "Note per il magazzino": ("#f4f0fa", "#e3d8f0")}
                 sfondo_rep, bordo_rep = colori_rep.get(titolo, ("#f7f8fb", "#e5e9f0"))
                 str_lit.markdown(f"<div style='padding:8px 10px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:700;color:#344054;margin:8px 0 4px'>{titolo}</div>", unsafe_allow_html=True)
-                getattr(str_lit, funzione_colore)(testo or "Nessuna nota.")
+                testo_sicuro = html.escape(str(testo or "Nessuna nota.")).replace("\n", "<br>")
+                str_lit.markdown(f"<div style='padding:9px 11px;border-radius:0 0 8px 8px;background:{sfondo_rep};border:1px solid {bordo_rep};border-top:0;color:#344054;white-space:normal'>{testo_sicuro}</div>", unsafe_allow_html=True)
                 if allegati:
-                  str_lit.markdown(f"📎 **Allegati {titolo.replace('Note per ', '')}:**")
+                  str_lit.markdown(f"<div style='padding:6px 10px;background:{sfondo_rep};border-left:1px solid {bordo_rep};border-right:1px solid {bordo_rep};color:#344054'>📎 <b>Allegati {titolo.replace('Note per ', '')}:</b></div>", unsafe_allow_html=True)
                   for att in allegati:
                     mostra_preview_allegato_evento(att, f"{prefisso}_{idx_ev}")
 
@@ -3151,23 +3190,11 @@ else:
                     ev.get("allegati_magazzino") or [], "error", "mag_all"
                 )
               elif is_cucina:
-                str_lit.markdown("**Note per la cucina:**")
-                str_lit.success(ev.get("note_cucina") or "Nessuna nota.")
-                if ev.get("allegati_cucina"):
-                  for att in ev.get("allegati_cucina"):
-                    mostra_preview_allegato_evento(att, f"cucina_c_{idx_ev}")
+                mostra_sezione_note("Note per la cucina", ev.get("note_cucina"), ev.get("allegati_cucina") or [], "success", f"cucina_c_{idx_ev}")
               elif is_sala:
-                str_lit.markdown("**Note per la sala:**")
-                str_lit.success(ev.get("note_sala") or "Nessuna nota.")
-                if ev.get("allegati_sala"):
-                  for att in ev.get("allegati_sala"):
-                    mostra_preview_allegato_evento(att, f"sala_s_{idx_ev}")
+                mostra_sezione_note("Note per la sala", ev.get("note_sala"), ev.get("allegati_sala") or [], "success", f"sala_s_{idx_ev}")
               elif is_magazzino or is_magazzino2:
-                str_lit.markdown("**Note per il magazzino:**")
-                str_lit.success(ev.get("note_magazzino") or "Nessuna nota.")
-                if ev.get("allegati_magazzino"):
-                  for att in ev.get("allegati_magazzino"):
-                    mostra_preview_allegato_evento(att, f"mag_{idx_ev}")
+                mostra_sezione_note("Note per il magazzino", ev.get("note_magazzino"), ev.get("allegati_magazzino") or [], "success", f"mag_{idx_ev}")
 
     elif str_lit.session_state.area_selezionata == "opzione_3":
       if is_admin:
