@@ -950,6 +950,43 @@ def dati_allegato_evento(allegato):
   return base64.b64decode(dati_b64) if dati_b64 else b""
 
 
+def mostra_preview_allegato_evento(allegato, chiave):
+  """Apre l'allegato in anteprima; il download è disponibile solo dopo."""
+  nome_file = str(allegato.get("nome_file") or "allegato")
+  mime = str(allegato.get("mime") or "application/octet-stream")
+  if mime == "application/octet-stream" and "." in nome_file:
+    estensione = nome_file.lower().rsplit(".", 1)[-1]
+    mime = {"pdf": "application/pdf", "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg"}.get(estensione, mime)
+  preview_key = f"{chiave}:{nome_file}"
+  if str_lit.button(f"👁️ Apri anteprima · {nome_file}", key=f"apri_anteprima_{chiave}_{nome_file}", use_container_width=True):
+    dati = dati_allegato_evento(allegato)
+    if dati:
+      str_lit.session_state.anteprima_allegato_evento = {"chiave": preview_key, "mime": mime, "nome_file": nome_file, "dati_b64": base64.b64encode(dati).decode("ascii")}
+      str_lit.rerun()
+    else:
+      str_lit.warning(f"Anteprima non disponibile per {nome_file}.")
+  anteprima = str_lit.session_state.get("anteprima_allegato_evento") or {}
+  if anteprima.get("chiave") == preview_key:
+    dati_b64 = anteprima.get("dati_b64", "")
+    if mime.startswith("image/"):
+      contenuto = f'<img src="data:{mime};base64,{dati_b64}" style="max-width:100%;max-height:360px;object-fit:contain;border-radius:10px;background:#f8fafc;padding:8px;">'
+      altezza = 380
+    elif mime == "application/pdf":
+      contenuto = f'<iframe src="data:application/pdf;base64,{dati_b64}" style="width:100%;height:380px;border:1px solid #d0d5dd;border-radius:10px;background:white;"></iframe>'
+      altezza = 400
+    else:
+      contenuto = '<div style="padding:24px;font:600 14px Arial;color:#344054;background:#f8fafc;border-radius:10px;">Anteprima non disponibile per questo formato.</div>'
+      altezza = 80
+    components.html(f'<div style="padding:4px 0;">{contenuto}</div>', height=altezza, scrolling=False)
+    col_preview_1, col_preview_2 = str_lit.columns([3, 1])
+    with col_preview_1:
+      str_lit.download_button("📥 Scarica allegato", data=base64.b64decode(dati_b64), file_name=nome_file, mime=mime, key=f"download_preview_{chiave}_{nome_file}", use_container_width=True)
+    with col_preview_2:
+      if str_lit.button("Chiudi", key=f"chiudi_anteprima_{chiave}_{nome_file}", use_container_width=True):
+        str_lit.session_state.anteprima_allegato_evento = None
+        str_lit.rerun()
+
+
 def migra_allegati_evento_legacy(evento):
   """Trasferisce una sola volta eventuali allegati evento ancora in Base64."""
   cambiato = False
@@ -1957,17 +1994,13 @@ if codice_scansionato:
     note_qr = html.escape(str(prodotto_qr.get("note") or "Nessuna nota inserita."))
     nome_qr = html.escape(str(prodotto_qr.get("nome") or "Prodotto"))
     codice_qr = html.escape(str(prodotto_qr.get("codice") or "-"))
-    categoria_qr = html.escape(testo_categorie(prodotto_qr.get("categoria")))
-    posizione_qr = html.escape(str(prodotto_qr.get("posizione") or "-"))
     quantita_qr = html.escape(str(prodotto_qr.get("quantita") or 0))
     scheda_qr = dati_scheda_tecnica(prodotto_qr.get("scheda_tecnica"))
     scheda_qr.update({
-        "materiale": prodotto_qr.get("scheda_materiale") or scheda_qr.get("materiale", ""),
-        "colore": prodotto_qr.get("scheda_colore") or scheda_qr.get("colore", ""),
         "dimensione": prodotto_qr.get("scheda_dimensione") or scheda_qr.get("dimensione", ""),
         "note": prodotto_qr.get("scheda_note") or scheda_qr.get("note", ""),
     })
-    campi_scheda_qr = [("Materiale", scheda_qr.get("materiale")), ("Colore", scheda_qr.get("colore")), ("Dimensione", scheda_qr.get("dimensione")), ("Note tecniche", scheda_qr.get("note"))]
+    campi_scheda_qr = [("Dimensione", scheda_qr.get("dimensione")), ("Note tecniche", scheda_qr.get("note"))]
     scheda_tecnica_html = "".join(
         f"<div class='qr-tech-item'><span>{html.escape(etichetta)}</span><b>{html.escape(str(valore).strip())}</b></div>"
         for etichetta, valore in campi_scheda_qr if str(valore or "").strip()
@@ -1983,18 +2016,19 @@ if codice_scansionato:
       .qr-card{{width:100%;display:grid;grid-template-columns:minmax(190px,230px) minmax(0,1fr);gap:24px;align-items:start;padding:22px 26px;border:1px solid #e4e7ec;border-radius:18px;background:#fff;box-shadow:0 8px 28px rgba(16,42,67,.08);min-width:0}}
       .qr-photo{{display:block;width:100%;height:230px;object-fit:contain;object-position:center;border-radius:12px;background:#f8fafc}}
       .qr-no-photo{{height:220px;display:flex;align-items:center;justify-content:center;background:#f8fafc;border-radius:12px;color:#98a2b3;font-size:.85rem}}
-      .qr-title{{font-size:1.45rem;font-weight:800;color:#083278;margin:0 0 2px}}
-      .qr-subtitle{{font-size:.76rem;color:#667085;margin:0 0 10px}}
-      .qr-quantity{{background:#083278;color:white;border-radius:12px;padding:11px 16px;margin:8px 0 10px}}
-      .qr-quantity-label{{font-size:.64rem;text-transform:uppercase;letter-spacing:.12em;opacity:.82}}
+      .qr-title{{font-size:1.02rem;font-weight:800;color:#083278;margin:0 0 1px;letter-spacing:.01em}}
+      .qr-subtitle{{font-size:.63rem;color:#667085;margin:0 0 9px;letter-spacing:.02em}}
+      .qr-product-title{{font-size:1.12rem;font-weight:800;color:#083278;margin:0}}
+      .qr-product-code{{font-size:.64rem;color:#98a2b3;margin-top:3px;letter-spacing:.06em}}
+      .qr-quantity{{background:#083278;color:white;border-radius:12px;padding:11px 16px;margin:9px 0 10px}}
+      .qr-quantity-label{{font-size:.62rem;text-transform:uppercase;letter-spacing:.12em;opacity:.82}}
       .qr-quantity-value{{font-size:2rem;font-weight:850;line-height:1.05;margin-top:2px}}
-      .qr-note{{background:#f3f8ff;border:1px solid #d7e7fa;border-radius:10px;padding:10px 13px;margin-top:6px;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;line-height:1.4;font-size:.86rem;max-height:92px;overflow:auto}}
-      .qr-meta{{font-size:.72rem;color:#667085;line-height:1.5;margin-top:8px}}
-      .qr-tech-title{{font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:#083278;font-weight:800;margin-top:10px}}
-      .qr-tech-grid{{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin-top:6px;min-width:0}}
-      .qr-tech-item{{font-size:.82rem;color:#667085;line-height:1.35;min-width:0;overflow-wrap:anywhere;word-break:break-word}}
-      .qr-tech-item span{{display:block;font-size:.61rem;text-transform:uppercase;letter-spacing:.04em;color:#98a2b3}}
-      .qr-tech-item b{{font-weight:650;color:#344054;display:block}}
+      .qr-note{{background:#f3f8ff;border:1px solid #d7e7fa;border-radius:10px;padding:10px 13px;margin-top:6px;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;line-height:1.4;font-size:.82rem;max-height:82px;overflow:auto}}
+      .qr-tech-title{{font-size:.63rem;text-transform:uppercase;letter-spacing:.1em;color:#083278;font-weight:800;margin-top:11px}}
+      .qr-tech-grid{{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;min-width:0}}
+      .qr-tech-item{{font-size:.78rem;color:#667085;line-height:1.35;min-width:0;overflow-wrap:anywhere;word-break:break-word;background:#f3f8ff;border:1px solid #d7e7fa;border-radius:10px;padding:9px 11px;max-height:76px;overflow:auto}}
+      .qr-tech-item span{{display:block;font-size:.58rem;text-transform:uppercase;letter-spacing:.04em;color:#7890ac}}
+      .qr-tech-item b{{font-weight:650;color:#344054;display:block;margin-top:4px}}
       .qr-info{{min-width:0;overflow:hidden}}
       @media(max-width:640px){{.qr-screen{{height:auto;min-height:calc(100vh - 24px);align-items:flex-start;padding-top:8px;overflow:visible}}.qr-card{{grid-template-columns:1fr;gap:12px;padding:14px 16px;border-radius:14px}}.qr-photo,.qr-no-photo{{height:175px}}.qr-title{{font-size:1.2rem}}.qr-quantity{{padding:9px 13px;margin:6px 0 8px}}.qr-quantity-value{{font-size:1.75rem}}.qr-note{{font-size:.8rem;padding:8px 11px;max-height:110px}}.qr-tech-grid{{grid-template-columns:1fr 1fr}}.qr-tech-item{{font-size:.8rem}}}}
     </style>
@@ -2002,10 +2036,10 @@ if codice_scansionato:
       <div>{foto_html}</div><div class="qr-info">
       <div class="qr-title">Scheda prodotto</div>
       <div class="qr-subtitle">Consultazione rapida</div>
-      <div class='qr-title' style='font-size:1.1rem'>{nome_qr}</div>
+      <div class='qr-product-title'>{nome_qr}</div>
+      <div class='qr-product-code'>Cod. {codice_qr}</div>
       <div class='qr-quantity'><div class='qr-quantity-label'>Quantità disponibile</div><div class='qr-quantity-value'>{quantita_qr}</div></div>
       <div class='qr-note'><strong>Note</strong><br>{note_qr}</div>
-      <div class='qr-meta'><b>Codice:</b> {codice_qr} · <b>Categoria:</b> {categoria_qr}<br><b>Posizione:</b> {posizione_qr}</div>
       {scheda_tecnica_html}
       </div></div></div>
     """)
@@ -2181,7 +2215,9 @@ def modale_crea_evento(data_precompilata=None):
     str_lit.markdown("#### 📝 Note e Allegati per Reparto")
 
     def comp_sezione_creazione(titolo_rep, chiave_pref):
-      str_lit.markdown(f"**{titolo_rep}**")
+      colori_rep = {"Note per tutti": ("#eef5ff", "#cfe0f6"), "Note per la sala": ("#f0f8f2", "#d6eadb"), "Note per la cucina": ("#fff7eb", "#f2dfbd"), "Note per il magazzino": ("#f4f0fa", "#e3d8f0")}
+      sfondo_rep, bordo_rep = colori_rep.get(titolo_rep, ("#f7f8fb", "#e5e9f0"))
+      str_lit.markdown(f"<div style='padding:8px 10px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:700;color:#344054;margin:8px 0 4px'>{titolo_rep}</div>", unsafe_allow_html=True)
       t_val = str_lit.text_area(
           f"Testo note - {titolo_rep}",
           key=f"dialog_crea_{chiave_pref}_t",
@@ -2277,6 +2313,32 @@ def modale_modifica_evento(idx_ev):
     str_lit.stop()
 
   m_data_precompilata = data_da_display_evento(ev_mod)
+
+  # Gli allegati esistenti hanno un'azione esplicita Rimuovi, non una checkbox ambigua.
+  def mostra_allegati_esistenti_evento(titolo, chiave_all):
+    allegati = ev_mod.get(chiave_all) or []
+    if not allegati:
+      return
+    colori_rep = {"Note per tutti": ("#eef5ff", "#cfe0f6"), "Note per la sala": ("#f0f8f2", "#d6eadb"), "Note per la cucina": ("#fff7eb", "#f2dfbd"), "Note per il magazzino": ("#f4f0fa", "#e3d8f0")}
+    sfondo_rep, bordo_rep = colori_rep.get(titolo, ("#f7f8fb", "#e5e9f0"))
+    str_lit.markdown(f"<div style='padding:8px 10px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:700;color:#344054;margin:8px 0 4px'>{titolo} · allegati presenti</div>", unsafe_allow_html=True)
+    for a_idx, all_item in enumerate(allegati):
+      col_all_1, col_all_2 = str_lit.columns([5, 1])
+      with col_all_1:
+        str_lit.caption(f"📎 {all_item.get('nome_file', 'Allegato')}")
+      with col_all_2:
+        if str_lit.button("Rimuovi", key=f"rimuovi_evento_{idx_ev}_{chiave_all}_{a_idx}"):
+          ev_mod[chiave_all] = [item for pos, item in enumerate(allegati) if pos != a_idx]
+          salva_evento_singolo(ev_mod)
+          str_lit.toast("Allegato rimosso")
+          str_lit.rerun()
+
+  str_lit.markdown("#### 📎 Allegati già caricati")
+  mostra_allegati_esistenti_evento("Note per tutti", "allegati_tutti")
+  mostra_allegati_esistenti_evento("Note per la sala", "allegati_sala")
+  mostra_allegati_esistenti_evento("Note per la cucina", "allegati_cucina")
+  mostra_allegati_esistenti_evento("Note per il magazzino", "allegati_magazzino")
+
   with str_lit.form(f"form_mod_ev_dialog_{idx_ev}"):
     m_nome = str_lit.text_input(
         "Nome Evento / Cliente", value=ev_mod.get("nome_evento", "")
@@ -2313,7 +2375,9 @@ def modale_modifica_evento(idx_ev):
     str_lit.markdown("#### 📝 Modifica Note e Gestione Allegati per Reparto")
 
     def comp_sezione_modifica(titolo_rep, chiave_testo, chiave_all):
-      str_lit.markdown(f"**{titolo_rep}**")
+      colori_rep = {"Note per tutti": ("#eef5ff", "#cfe0f6"), "Note per la sala": ("#f0f8f2", "#d6eadb"), "Note per la cucina": ("#fff7eb", "#f2dfbd"), "Note per il magazzino": ("#f4f0fa", "#e3d8f0")}
+      sfondo_rep, bordo_rep = colori_rep.get(titolo_rep, ("#f7f8fb", "#e5e9f0"))
+      str_lit.markdown(f"<div style='padding:8px 10px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:700;color:#344054;margin:8px 0 4px'>{titolo_rep}</div>", unsafe_allow_html=True)
       t_curr = ev_mod.get(chiave_testo, "")
       a_curr = ev_mod.get(chiave_all, [])
 
@@ -2323,15 +2387,6 @@ def modale_modifica_evento(idx_ev):
           key=f"dialog_t_{chiave_testo}_{idx_ev}",
           label_visibility="collapsed",
       )
-
-      if a_curr:
-        str_lit.markdown("📁 *Allegati esistenti (deseleziona per rimuovere):*")
-        for a_idx, all_item in enumerate(a_curr):
-          str_lit.checkbox(
-              f"Mantieni: {all_item['nome_file']}",
-              value=True,
-              key=f"dialog_mantieni_{chiave_testo}_{idx_ev}_{a_idx}",
-          )
 
       f_aggiunta = str_lit.file_uploader(
           f"Aggiungi nuovi allegati - {titolo_rep}",
@@ -2368,13 +2423,8 @@ def modale_modifica_evento(idx_ev):
     if btn_salva_ev:
 
       def filtra_e_unisci_allegati(existing_list, nuovi_files, chiave_testo):
-        risultati = []
-        if existing_list:
-          for a_idx, item in enumerate(existing_list):
-            if str_lit.session_state.get(
-                f"dialog_mantieni_{chiave_testo}_{idx_ev}_{a_idx}", True
-            ):
-              risultati.append(item)
+        # Gli allegati esistenti sono già stati filtrati con il pulsante Rimuovi.
+        risultati = list(existing_list or [])
         if nuovi_files:
           for f in nuovi_files:
             risultati.append({
@@ -2961,18 +3011,14 @@ else:
               str_lit.markdown("---")
 
               def mostra_sezione_note(titolo, testo, allegati, funzione_colore, prefisso):
-                str_lit.markdown(f"**{titolo}:**")
+                colori_rep = {"Note per tutti": ("#eef5ff", "#cfe0f6"), "Note per la sala": ("#f0f8f2", "#d6eadb"), "Note per la cucina": ("#fff7eb", "#f2dfbd"), "Note per il magazzino": ("#f4f0fa", "#e3d8f0")}
+                sfondo_rep, bordo_rep = colori_rep.get(titolo, ("#f7f8fb", "#e5e9f0"))
+                str_lit.markdown(f"<div style='padding:8px 10px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:700;color:#344054;margin:8px 0 4px'>{titolo}</div>", unsafe_allow_html=True)
                 getattr(str_lit, funzione_colore)(testo or "Nessuna nota.")
                 if allegati:
                   str_lit.markdown(f"📎 **Allegati {titolo.replace('Note per ', '')}:**")
                   for att in allegati:
-                    str_lit.download_button(
-                        f"📥 Scarica allegato: {att['nome_file']}",
-                        data=dati_allegato_evento(att),
-                        file_name=att["nome_file"],
-                        mime=att.get("mime", "application/octet-stream"),
-                        key=f"dl_{prefisso}_{idx_ev}_{att['nome_file']}",
-                    )
+                    mostra_preview_allegato_evento(att, f"{prefisso}_{idx_ev}")
 
               mostra_sezione_note(
                   "Note per tutti", ev.get("note_tutti"),
@@ -2997,35 +3043,19 @@ else:
                 str_lit.success(ev.get("note_cucina") or "Nessuna nota.")
                 if ev.get("allegati_cucina"):
                   for att in ev.get("allegati_cucina"):
-                    str_lit.download_button(
-                        f"📥 Scarica allegato: {att['nome_file']}",
-                        data=dati_allegato_evento(att),
-                        file_name=att["nome_file"],
-                        key=f"dl_cucina_c_{idx_ev}_{att['nome_file']}",
-                    )
+                    mostra_preview_allegato_evento(att, f"cucina_c_{idx_ev}")
               elif is_sala:
                 str_lit.markdown("**Note per la sala:**")
                 str_lit.success(ev.get("note_sala") or "Nessuna nota.")
                 if ev.get("allegati_sala"):
                   for att in ev.get("allegati_sala"):
-                    str_lit.download_button(
-                        f"📥 Scarica allegato: {att['nome_file']}",
-                        data=dati_allegato_evento(att),
-                        file_name=att["nome_file"],
-                        key=f"dl_sala_s_{idx_ev}_{att['nome_file']}",
-                    )
+                    mostra_preview_allegato_evento(att, f"sala_s_{idx_ev}")
               elif is_magazzino or is_magazzino2:
                 str_lit.markdown("**Note per il magazzino:**")
                 str_lit.success(ev.get("note_magazzino") or "Nessuna nota.")
                 if ev.get("allegati_magazzino"):
                   for att in ev.get("allegati_magazzino"):
-                    str_lit.download_button(
-                        f"📥 Scarica allegato: {att['nome_file']}",
-                        data=dati_allegato_evento(att),
-                        file_name=att["nome_file"],
-                        mime=att.get("mime", "application/octet-stream"),
-                        key=f"dl_mag_{idx_ev}_{att['nome_file']}",
-                    )
+                    mostra_preview_allegato_evento(att, f"mag_{idx_ev}")
 
     elif str_lit.session_state.area_selezionata == "opzione_3":
       if is_admin:
