@@ -639,71 +639,94 @@ def carica_dati_esterni():
         "eventi_catering": [],
         "utenti_autorizzati": None,
     }
+  # Ogni tabella viene caricata separatamente: un errore in utenti o noleggi
+  # non deve mai trasformare l'inventario in una lista vuota.
+  prodotti = []
   try:
-    # Vengono richiesti solo i campi necessari; gli allegati restano nel DB
-    # ma non vengono caricati nella pagina del magazzino.
-    try:
-      res_prod = supabase.table("prodotti_noleggio").select(
-          "id,codice,nome,categoria,quantita,posizione,costo_noleggio,note,foto_path"
-      ).order("nome").execute()
-    except Exception:
-      # Compatibilità temporanea con Supabase prima dell'esecuzione della migrazione SQL.
-      res_prod = supabase.table("prodotti_noleggio").select(
-          "id,codice,nome,categoria,quantita,posizione,costo_noleggio,note,foto_path"
-      ).order("nome").execute()
+    # Struttura attuale.
+    res_prod = supabase.table("prodotti_noleggio").select(
+        "id,codice,nome,categoria,quantita,posizione,costo_noleggio,note,foto_path"
+    ).order("nome").execute()
     prodotti = res_prod.data or []
-    for prodotto in prodotti:
-      scheda_precedente = dati_scheda_tecnica(prodotto.get("scheda_tecnica"))
-      campi_db = {
-          "materiale": prodotto.get("scheda_materiale"),
-          "colore": prodotto.get("scheda_colore"),
-          "dimensione": prodotto.get("scheda_dimensione"),
-          "note": prodotto.get("scheda_note"),
-      }
-      scheda = campi_db if any(valore not in (None, "") for valore in campi_db.values()) else scheda_precedente
-      prodotto["scheda_tecnica"] = json.dumps(scheda, ensure_ascii=False)
+  except Exception:
     try:
-      try:
-        res_nol = supabase.table("noleggi").select(
-            "id,titolo,inizio,fine,stato,location,referente,telefono,note,bolla,ddt,vario,bolla_url,ddt_url,vario_url,bolla_mime,ddt_mime,vario_mime"
-        ).order("inizio").execute()
-      except Exception:
-        # Compatibilità con la tabella precedente alla migrazione Storage.
-        res_nol = supabase.table("noleggi").select(
-            "id,titolo,inizio,fine,stato,location,referente,telefono,note,bolla,ddt,vario,bolla_mime,ddt_mime,vario_mime"
-        ).order("inizio").execute()
-      noleggi = [normalizza_noleggio_db(r) for r in (res_nol.data or [])]
-    except Exception as errore_noleggi:
-      str_lit.error(f"Errore caricamento tabella noleggi da Supabase: {errore_noleggi}")
-      noleggi = []
+      # Compatibilità con la struttura iniziale: descrizione, prezzo, foto_url.
+      res_prod = supabase.table("prodotti_noleggio").select(
+          "id,codice,nome,categoria,descrizione,quantita,prezzo,foto_url"
+      ).order("nome").execute()
+      prodotti = []
+      for prodotto_vecchio in (res_prod.data or []):
+        prodotti.append({
+            "id": prodotto_vecchio.get("id"),
+            "codice": prodotto_vecchio.get("codice"),
+            "nome": prodotto_vecchio.get("nome"),
+            "categoria": prodotto_vecchio.get("categoria"),
+            "quantita": prodotto_vecchio.get("quantita"),
+            "posizione": prodotto_vecchio.get("posizione") or "",
+            "costo_noleggio": prodotto_vecchio.get("prezzo") or 0,
+            "note": prodotto_vecchio.get("descrizione") or "",
+            "foto_path": prodotto_vecchio.get("foto_url") or "",
+        })
+    except Exception as errore_prodotti:
+      str_lit.error(f"Errore caricamento inventario da Supabase: {errore_prodotti}")
+      prodotti = []
 
-    # Gli eventi vengono caricati solo entrando nella sezione Catering o Liste.
-    eventi = []
+  # I campi tecnici sono opzionali e non devono bloccare il catalogo.
+  for prodotto in prodotti:
+    prodotto["scheda_tecnica"] = json.dumps({
+        "materiale": prodotto.get("scheda_materiale") or "",
+        "colore": prodotto.get("scheda_colore") or "",
+        "dimensione": prodotto.get("scheda_dimensione") or "",
+        "note": prodotto.get("scheda_note") or "",
+    }, ensure_ascii=False)
 
-    res_usr = supabase.table("utenti_autorizzati").select(
-        "id,username,password,ruolo,nome,email"
-    ).execute()
-    utenti = {}
+  noleggi = []
+  try:
+    try:
+      res_nol = supabase.table("noleggi").select(
+          "id,titolo,inizio,fine,stato,location,referente,telefono,note,bolla,ddt,vario,bolla_url,ddt_url,vario_url,bolla_mime,ddt_mime,vario_mime"
+      ).order("inizio").execute()
+    except Exception:
+      res_nol = supabase.table("noleggi").select(
+          "id,titolo,inizio,fine,stato,location,referente,telefono,note,bolla,ddt,vario,bolla_mime,ddt_mime,vario_mime"
+      ).order("inizio").execute()
+    noleggi = [normalizza_noleggio_db(r) for r in (res_nol.data or [])]
+  except Exception as errore_noleggi:
+    str_lit.warning(f"Noleggi non caricati: {errore_noleggi}")
+
+  # Gli eventi vengono caricati solo entrando nella sezione Catering o Liste.
+  eventi = []
+
+  utenti = {}
+  try:
+    try:
+      res_usr = supabase.table("utenti_autorizzati").select(
+          "id,username,password,ruolo,nome,email"
+      ).execute()
+    except Exception:
+      # Compatibilità con la vecchia tabella che aveva solo username/password.
+      res_usr = supabase.table("utenti_autorizzati").select(
+          "id,username,password"
+      ).execute()
     for u in (res_usr.data or []):
       username = u.get("username")
       if username:
         utenti[username] = {
             "id": u.get("id"),
             "password": u.get("password"),
-            "ruolo": u.get("ruolo"),
-            "nome": u.get("nome"),
-            "email": u.get("email"),
+            "ruolo": u.get("ruolo") or "",
+            "nome": u.get("nome") or username,
+            "email": u.get("email") or "",
         }
+  except Exception as errore_utenti:
+    str_lit.warning(f"Utenti non caricati: {errore_utenti}")
 
-    return {
-        "prodotti_noleggio": prodotti,
-        "noleggi": noleggi,
-        "eventi_catering": eventi,
-        "utenti_autorizzati": utenti if utenti else None,
-    }
-  except Exception as e:
-    str_lit.error(f"Errore di caricamento dati da Supabase: {e}")
-    return {"prodotti_noleggio": [], "eventi_catering": [], "utenti_autorizzati": None}
+  return {
+      "prodotti_noleggio": prodotti,
+      "noleggi": noleggi,
+      "eventi_catering": eventi,
+      "utenti_autorizzati": utenti if utenti else None,
+  }
 
 
 @str_lit.cache_data(ttl=600, show_spinner=False)
