@@ -52,9 +52,14 @@ str_lit.set_page_config(
 # ==============================================================================
 try:
     SUPABASE_URL = str_lit.secrets["SUPABASE_URL"]
-    SUPABASE_SERVICE_ROLE_KEY = str_lit.secrets["SUPABASE_SERVICE_ROLE_KEY"]
+    # Accetta sia il nome nuovo sia quello usato nella configurazione
+    # precedente, così l'app non smette di leggere Supabase dopo l'aggiornamento.
+    SUPABASE_SERVICE_ROLE_KEY = str_lit.secrets.get(
+        "SUPABASE_SERVICE_ROLE_KEY",
+        str_lit.secrets.get("SUPABASE_KEY", "")
+    )
 except Exception:
-    str_lit.error("Configurare SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY nei Secrets di Streamlit.")
+    str_lit.error("Configurare SUPABASE_URL e SUPABASE_KEY nei Secrets di Streamlit.")
     str_lit.stop()
 BUCKET_IMMAGINI = "immagini_prodotti"
 BUCKET_ALLEGATI_NOLEGGI = "allegati_noleggi"
@@ -632,13 +637,9 @@ def elimina_noleggio_supabase(noleggio_id):
 def carica_dati_esterni():
   # La pagina QR è pubblica e deve essere immediata: non serve caricare
   # inventario, noleggi e utenti prima di leggere il singolo prodotto.
-  if str(str_lit.query_params.get("codice", "")).strip():
-    return {
-        "prodotti_noleggio": [],
-        "noleggi": [],
-        "eventi_catering": [],
-        "utenti_autorizzati": None,
-    }
+  # Anche quando l'URL contiene ?codice=... (pagina pubblica del QR), non
+  # restituiamo più un inventario vuoto: il parametro QR non deve influenzare
+  # il caricamento dei dati dell'app.
   # Ogni tabella viene caricata separatamente: un errore in utenti o noleggi
   # non deve mai trasformare l'inventario in una lista vuota.
   prodotti = []
@@ -651,16 +652,22 @@ def carica_dati_esterni():
   except Exception:
     try:
       # Compatibilità con la struttura iniziale: descrizione, prezzo, foto_url.
-      res_prod = supabase.table("prodotti_noleggio").select(
-          "id,codice,nome,categoria,descrizione,quantita,prezzo,foto_url"
-      ).order("nome").execute()
+      try:
+        res_prod = supabase.table("prodotti_noleggio").select(
+            "id,codice,nome,categoria,descrizione,quantita,prezzo,foto_url"
+        ).order("nome").execute()
+      except Exception:
+        # Struttura SQL originale: non include categoria né posizione.
+        res_prod = supabase.table("prodotti_noleggio").select(
+            "id,codice,nome,descrizione,quantita,prezzo,foto_url"
+        ).order("nome").execute()
       prodotti = []
       for prodotto_vecchio in (res_prod.data or []):
         prodotti.append({
             "id": prodotto_vecchio.get("id"),
             "codice": prodotto_vecchio.get("codice"),
             "nome": prodotto_vecchio.get("nome"),
-            "categoria": prodotto_vecchio.get("categoria"),
+            "categoria": prodotto_vecchio.get("categoria") or "",
             "quantita": prodotto_vecchio.get("quantita"),
             "posizione": prodotto_vecchio.get("posizione") or "",
             "costo_noleggio": prodotto_vecchio.get("prezzo") or 0,
@@ -1425,7 +1432,11 @@ if "utenti_autorizzati" not in str_lit.session_state:
         },
     }
 
-if "prodotti_noleggio" not in str_lit.session_state:
+if "prodotti_noleggio" not in str_lit.session_state or (
+    not str_lit.session_state.get("prodotti_noleggio")
+    and dati_salvati
+    and dati_salvati.get("prodotti_noleggio")
+):
   if dati_salvati and "prodotti_noleggio" in dati_salvati:
     str_lit.session_state.prodotti_noleggio = dati_salvati["prodotti_noleggio"]
   else:
