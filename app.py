@@ -1832,7 +1832,7 @@ def modale_catering_da_calendario(evento):
     sfondo_rep, bordo_rep = colori_rep.get(titolo, ("#f7f8fb", "#e5e9f0"))
     str_lit.markdown(f"<div style='padding:8px 10px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:700;color:#344054;margin:8px 0 4px'>{titolo}</div>", unsafe_allow_html=True)
     testo_sicuro = html.escape(str(evento.get(campo_note) or f"Nessuna nota per {chiave}.")).replace("\n", "<br>")
-    str_lit.markdown(f"<div style='padding:9px 11px;border-radius:0 0 8px 8px;background:{sfondo_rep};border:1px solid {bordo_rep};border-top:0;color:#344054'>{testo_sicuro}</div>", unsafe_allow_html=True)
+    str_lit.markdown(f"<div style='padding:9px 11px;border-radius:0 0 8px 8px;background:#ffffff;border:1px solid {bordo_rep};border-top:0;color:#344054'>{testo_sicuro}</div>", unsafe_allow_html=True)
     for indice, allegato in enumerate(evento.get(campo_allegati) or []):
       nome_allegato = allegato.get("nome_file", f"allegato_{chiave}_{indice}")
       dati_b64 = allegato.get("dati_b64", "")
@@ -2342,14 +2342,6 @@ def modale_crea_evento(data_precompilata=None):
     str_lit.markdown("#### 📝 Note e Allegati per Reparto")
     str_lit.markdown("""
     <style>
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) {background:#dcecff!important;border-color:#9fc5ee!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) {background:#d9f0df!important;border-color:#a9d6b3!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) {background:#ffedc7!important;border-color:#e5bd78!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) {background:#e9def7!important;border-color:#c9afe5!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) [data-testid="stFileUploaderDropzone"] {background:#edf6ff!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) [data-testid="stFileUploaderDropzone"] {background:#eef9f1!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) [data-testid="stFileUploaderDropzone"] {background:#fff5df!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) [data-testid="stFileUploaderDropzone"] {background:#f4edfb!important}
     </style>
     """, unsafe_allow_html=True)
 
@@ -2517,14 +2509,6 @@ def modale_modifica_evento(idx_ev):
     str_lit.markdown("#### 📝 Modifica Note e Gestione Allegati per Reparto")
     str_lit.markdown("""
     <style>
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) {background:#dcecff!important;border-color:#9fc5ee!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) {background:#d9f0df!important;border-color:#a9d6b3!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) {background:#ffedc7!important;border-color:#e5bd78!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) {background:#e9def7!important;border-color:#c9afe5!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) [data-testid="stFileUploaderDropzone"] {background:#edf6ff!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) [data-testid="stFileUploaderDropzone"] {background:#eef9f1!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) [data-testid="stFileUploaderDropzone"] {background:#fff5df!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) [data-testid="stFileUploaderDropzone"] {background:#f4edfb!important}
     </style>
     """, unsafe_allow_html=True)
     mf_priv_mod = []
@@ -3187,7 +3171,7 @@ else:
                 sfondo_rep, bordo_rep = colori_rep.get(titolo, ("#f7f8fb", "#e5e9f0"))
                 str_lit.markdown(f"<div style='padding:8px 10px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:700;color:#344054;margin:8px 0 4px'>{titolo}</div>", unsafe_allow_html=True)
                 testo_sicuro = html.escape(str(testo or "Nessuna nota.")).replace("\n", "<br>")
-                str_lit.markdown(f"<div style='padding:9px 11px;border-radius:0 0 8px 8px;background:{sfondo_rep};border:1px solid {bordo_rep};border-top:0;color:#344054;white-space:normal'>{testo_sicuro}</div>", unsafe_allow_html=True)
+                str_lit.markdown(f"<div style='padding:9px 11px;border-radius:0 0 8px 8px;background:#ffffff;border:1px solid {bordo_rep};border-top:0;color:#344054;white-space:normal'>{testo_sicuro}</div>", unsafe_allow_html=True)
                 if allegati:
                   str_lit.markdown(f"<div style='padding:6px 10px;background:{sfondo_rep};border-left:1px solid {bordo_rep};border-right:1px solid {bordo_rep};color:#344054'>📎 <b>Allegati {titolo.replace('Note per ', '')}:</b></div>", unsafe_allow_html=True)
                   for att in allegati:
