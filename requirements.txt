@@ -4,4 +4,6 @@ requests>=2.31
 reportlab>=4.0
 qrcode[pil]>=7.4
 Pillow>=10.0
+pypdf>=5.0
+pdf2image>=1.17
 streamlit-calendar>=1.3.1
