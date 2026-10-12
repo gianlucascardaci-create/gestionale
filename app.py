@@ -1567,13 +1567,18 @@ def modale_crea_noleggio_demo(data_selezionata):
       ora_fine = str_lit.time_input("Ora fine")
       stato = str_lit.selectbox("Stato", ["Confermato", "Non confermato"])
       note = str_lit.text_area("Note varie")
-    a1, a2, a3 = str_lit.columns(3)
-    with a1:
-      bolla = str_lit.file_uploader("Bolla con prezzo", type=["pdf", "jpg", "jpeg", "png"])
-    with a2:
-      ddt = str_lit.file_uploader("DDT", type=["pdf", "jpg", "jpeg", "png"])
-    with a3:
-      vario = str_lit.file_uploader("Vario", type=["pdf", "jpg", "jpeg", "png"])
+    str_lit.markdown("#### 📎 Allegati del noleggio")
+    def uploader_noleggio_creazione(etichetta, chiave):
+      with str_lit.container(border=True):
+        str_lit.markdown(f"**{etichetta}**")
+        return str_lit.file_uploader(
+            f"Aggiungi {etichetta} (facoltativo)",
+            type=["pdf", "jpg", "jpeg", "png"],
+            key=f"crea_noleggio_{chiave}",
+        )
+    bolla = uploader_noleggio_creazione("Bolla con prezzo", "bolla")
+    ddt = uploader_noleggio_creazione("DDT", "ddt")
+    vario = uploader_noleggio_creazione("Vario", "vario")
     salva = str_lit.form_submit_button("Salva noleggio", type="primary", use_container_width=True)
   if salva:
     if not titolo.strip() or not location.strip() or not referente.strip() or not telefono.strip():
@@ -1687,14 +1692,8 @@ def modale_modifica_noleggio_demo(noleggio_id):
       ora_fine = str_lit.time_input("Ora fine", noleggio["fine"].time(), disabled=not puo_modificare)
       stato = str_lit.selectbox("Stato", ["Confermato", "Non confermato"], index=0 if noleggio["stato"] == "confermato" else 1, disabled=not puo_modificare)
       note = str_lit.text_area("Note varie", noleggio["note"], disabled=not puo_modificare)
-    str_lit.markdown("#### Allegati")
-    if ruolo_corrente in {"Amministratore", "Magazzino2"}:
-      str_lit.write(f"Bolla con prezzo: `{noleggio['bolla']}`")
-    if ruolo_corrente in {"Amministratore", "Magazzino2", "Magazzino"}:
-      str_lit.write(f"DDT: `{noleggio['ddt']}`")
-      str_lit.write(f"Vario: `{noleggio['vario']}`")
     if puo_modificare:
-      str_lit.markdown("#### Aggiungi o rimuovi allegati")
+      str_lit.markdown("#### 📎 Sostituisci allegati")
       campi_upload = []
       if ruolo_corrente in {"Amministratore", "Magazzino2"}:
         campi_upload.append(("Bolla con prezzo", "bolla"))
@@ -1702,22 +1701,13 @@ def modale_modifica_noleggio_demo(noleggio_id):
       for etichetta_upload, campo_upload in campi_upload:
         with str_lit.container(border=True):
           str_lit.markdown(f"**{etichetta_upload}**")
-          file_esistente = noleggio.get(campo_upload) or "Nessun file"
-          mantieni = True
-          if file_esistente != "Nessun file":
-            str_lit.markdown("📁 *Allegato esistente (deseleziona per rimuovere):*")
-            mantieni = str_lit.checkbox(
-                f"Mantieni: {file_esistente}",
-                value=True,
-                key=f"mantieni_{campo_upload}_{noleggio_id}",
-            )
           nuovo_file = str_lit.file_uploader(
-              f"Aggiungi nuovi allegati - {etichetta_upload}",
+              f"Carica un nuovo file per sostituire quello attuale (facoltativo)",
               accept_multiple_files=False,
               type=["pdf", "jpg", "jpeg", "png"],
               key=f"upload_{campo_upload}_{noleggio_id}",
           )
-        allegati_modifica[campo_upload] = (mantieni, nuovo_file)
+        allegati_modifica[campo_upload] = nuovo_file
     col_comandi1, col_comandi2 = str_lit.columns(2)
     with col_comandi1:
       salva = str_lit.form_submit_button("Salva modifiche", type="primary", use_container_width=True, disabled=not puo_modificare)
@@ -1737,16 +1727,22 @@ def modale_modifica_noleggio_demo(noleggio_id):
         dati_b64 = dati_allegato_noleggio(noleggio, campo_allegato)
         mime_allegato = noleggio.get(f"{campo_allegato}_mime", "application/octet-stream")
         dati_download = dati_b64 if dati_b64 else f"Allegato demo: {nome_allegato}".encode("utf-8")
-        mostra_download_bytes(nome_allegato, mime_allegato, dati_download, f"noleggio_{noleggio_id}_{campo_allegato}")
+        col_download, col_rimuovi = str_lit.columns([3, 1])
+        with col_download:
+          mostra_download_bytes(nome_allegato, mime_allegato, dati_download, f"noleggio_{noleggio_id}_{campo_allegato}")
+        with col_rimuovi:
+          if puo_modificare and str_lit.button("Rimuovi", key=f"rimuovi_noleggio_{noleggio_id}_{campo_allegato}", use_container_width=True):
+            noleggio[campo_allegato] = "Nessun file"
+            noleggio[f"{campo_allegato}_url"] = ""
+            noleggio[f"{campo_allegato}_dati_b64"] = ""
+            noleggio[f"{campo_allegato}_mime"] = "application/octet-stream"
+            salva_noleggio_supabase(noleggio)
+            str_lit.toast(f"{etichetta_allegato} rimosso")
+            str_lit.rerun()
 
   if salva:
     noleggio.update({"titolo": titolo, "inizio": datetime.combine(data_inizio, ora_inizio), "fine": datetime.combine(data_fine, ora_fine), "location": location, "referente": referente, "telefono": telefono, "note": note, "stato": "confermato" if stato == "Confermato" else "non confermato"})
-    for campo_upload, (mantieni, nuovo_file) in allegati_modifica.items():
-      if not mantieni:
-        noleggio[campo_upload] = "Nessun file"
-        noleggio[f"{campo_upload}_url"] = ""
-        noleggio[f"{campo_upload}_dati_b64"] = ""
-        noleggio[f"{campo_upload}_mime"] = "application/octet-stream"
+    for campo_upload, nuovo_file in allegati_modifica.items():
       if nuovo_file is not None:
         noleggio[campo_upload] = nuovo_file.name
         noleggio[f"{campo_upload}_url"] = salva_allegato_noleggio_su_storage(nuovo_file)
@@ -1802,7 +1798,7 @@ def mostra_cartella_privata_evento(evento):
   if (str_lit.session_state.get("utente_loggato") or {}).get("ruolo") != "Amministratore":
     return
   allegati = evento.get("allegati_privati") or []
-  str_lit.markdown("<div style='padding:9px 11px;border-radius:8px;background:#f4f0fa;border:1px solid #e3d8f0;font-weight:700;color:#344054;margin:12px 0 5px'>Cartella privata Admin</div>", unsafe_allow_html=True)
+  str_lit.markdown("<div style='padding:9px 11px;border-radius:8px;background:#e9def7;border:1px solid #c9afe5;font-weight:700;color:#344054;margin:12px 0 5px'>Cartella privata Admin</div>", unsafe_allow_html=True)
   str_lit.caption("Questa sezione è visibile solo all'Amministratore.")
   if not allegati:
     str_lit.info("Nessun documento privato inserito.")
@@ -1832,7 +1828,7 @@ def modale_catering_da_calendario(evento):
     str_lit.markdown(f"**Staff:** {evento.get('staff', 0)}")
   str_lit.markdown("---")
   def mostra_note_calendario(titolo, campo_note, campo_allegati, chiave):
-    colori_rep = {"Note per tutti": ("#eef5ff", "#cfe0f6"), "Note per la sala": ("#f0f8f2", "#d6eadb"), "Note per la cucina": ("#fff7eb", "#f2dfbd"), "Note per il magazzino": ("#f4f0fa", "#e3d8f0")}
+    colori_rep = {"Note per tutti": ("#dcecff", "#9fc5ee"), "Note per la sala": ("#d9f0df", "#a9d6b3"), "Note per la cucina": ("#ffedc7", "#e5bd78"), "Note per il magazzino": ("#e9def7", "#c9afe5")}
     sfondo_rep, bordo_rep = colori_rep.get(titolo, ("#f7f8fb", "#e5e9f0"))
     str_lit.markdown(f"<div style='padding:8px 10px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:700;color:#344054;margin:8px 0 4px'>{titolo}</div>", unsafe_allow_html=True)
     testo_sicuro = html.escape(str(evento.get(campo_note) or f"Nessuna nota per {chiave}.")).replace("\n", "<br>")
@@ -1962,7 +1958,7 @@ def mostra_noleggi_demo():
 
   str_lit.markdown("""
   <style>
-  .planner-header {background:linear-gradient(135deg,#f8fbff 0%,#eef6ff 100%); border:1px solid #d8e8f8; border-radius:10px; padding:7px 13px 6px; margin:2px 0 5px;}
+  .planner-header {background:linear-gradient(135deg,#edf6ff 0%,#eef6ff 100%); border:1px solid #d8e8f8; border-radius:10px; padding:7px 13px 6px; margin:2px 0 5px;}
   .planner-kicker {font-size:.56rem; letter-spacing:.13em; font-weight:800; color:#667085; margin-bottom:2px;}
   .planner-header h1 {font-size:1.08rem; color:#102a43; margin:0; letter-spacing:-.02em;}
   .planner-header p {font-size:.76rem; color:#627d98; margin:3px 0 0;}
@@ -2346,26 +2342,26 @@ def modale_crea_evento(data_precompilata=None):
     str_lit.markdown("#### 📝 Note e Allegati per Reparto")
     str_lit.markdown("""
     <style>
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) {background:#eef5ff!important;border-color:#cfe0f6!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) {background:#f0f8f2!important;border-color:#d6eadb!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) {background:#fff7eb!important;border-color:#f2dfbd!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) {background:#f4f0fa!important;border-color:#e3d8f0!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) [data-testid="stFileUploaderDropzone"] {background:#f8fbff!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) [data-testid="stFileUploaderDropzone"] {background:#f8fcf9!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) [data-testid="stFileUploaderDropzone"] {background:#fffaf2!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) [data-testid="stFileUploaderDropzone"] {background:#faf8fd!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) {background:#dcecff!important;border-color:#9fc5ee!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) {background:#d9f0df!important;border-color:#a9d6b3!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) {background:#ffedc7!important;border-color:#e5bd78!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) {background:#e9def7!important;border-color:#c9afe5!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) [data-testid="stFileUploaderDropzone"] {background:#edf6ff!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) [data-testid="stFileUploaderDropzone"] {background:#eef9f1!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) [data-testid="stFileUploaderDropzone"] {background:#fff5df!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) [data-testid="stFileUploaderDropzone"] {background:#f4edfb!important}
     </style>
     """, unsafe_allow_html=True)
 
     ruolo_creazione = (str_lit.session_state.get("utente_loggato") or {}).get("ruolo", "")
     f_privati = []
     if ruolo_creazione == "Amministratore":
-      str_lit.markdown("<div style='padding:9px 11px;border-radius:8px;background:#f4f0fa;border:1px solid #e3d8f0;font-weight:700;color:#344054;margin:10px 0 4px'>Cartella privata Admin</div>", unsafe_allow_html=True)
+      str_lit.markdown("<div style='padding:9px 11px;border-radius:8px;background:#e9def7;border:1px solid #c9afe5;font-weight:700;color:#344054;margin:10px 0 4px'>Cartella privata Admin</div>", unsafe_allow_html=True)
       str_lit.caption("Visibile solo all'Amministratore e scaricabile come unico PDF multipagina.")
       f_privati = str_lit.file_uploader("Allegati privati dell'evento", accept_multiple_files=True, type=["png", "jpg", "jpeg", "pdf"], key="dialog_crea_privati_f")
 
     def comp_sezione_creazione(titolo_rep, chiave_pref):
-      colori_rep = {"Note per tutti": ("#eef5ff", "#cfe0f6"), "Note per la sala": ("#f0f8f2", "#d6eadb"), "Note per la cucina": ("#fff7eb", "#f2dfbd"), "Note per il magazzino": ("#f4f0fa", "#e3d8f0")}
+      colori_rep = {"Note per tutti": ("#dcecff", "#9fc5ee"), "Note per la sala": ("#d9f0df", "#a9d6b3"), "Note per la cucina": ("#ffedc7", "#e5bd78"), "Note per il magazzino": ("#e9def7", "#c9afe5")}
       sfondo_rep, bordo_rep = colori_rep.get(titolo_rep, ("#f7f8fb", "#e5e9f0"))
       with str_lit.container(border=True):
         str_lit.markdown(f"<span class='note-block-marker note-block-{chiave_pref}'></span>", unsafe_allow_html=True)
@@ -2471,7 +2467,7 @@ def modale_modifica_evento(idx_ev):
     allegati = ev_mod.get(chiave_all) or []
     if not allegati:
       return
-    colori_rep = {"Note per tutti": ("#eef5ff", "#cfe0f6"), "Note per la sala": ("#f0f8f2", "#d6eadb"), "Note per la cucina": ("#fff7eb", "#f2dfbd"), "Note per il magazzino": ("#f4f0fa", "#e3d8f0")}
+    colori_rep = {"Note per tutti": ("#dcecff", "#9fc5ee"), "Note per la sala": ("#d9f0df", "#a9d6b3"), "Note per la cucina": ("#ffedc7", "#e5bd78"), "Note per il magazzino": ("#e9def7", "#c9afe5")}
     sfondo_rep, bordo_rep = colori_rep.get(titolo, ("#f7f8fb", "#e5e9f0"))
     str_lit.markdown(f"<div style='padding:8px 10px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:700;color:#344054;margin:8px 0 4px'>{titolo} · allegati presenti</div>", unsafe_allow_html=True)
     for a_idx, all_item in enumerate(allegati):
@@ -2521,23 +2517,23 @@ def modale_modifica_evento(idx_ev):
     str_lit.markdown("#### 📝 Modifica Note e Gestione Allegati per Reparto")
     str_lit.markdown("""
     <style>
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) {background:#eef5ff!important;border-color:#cfe0f6!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) {background:#f0f8f2!important;border-color:#d6eadb!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) {background:#fff7eb!important;border-color:#f2dfbd!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) {background:#f4f0fa!important;border-color:#e3d8f0!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) [data-testid="stFileUploaderDropzone"] {background:#f8fbff!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) [data-testid="stFileUploaderDropzone"] {background:#f8fcf9!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) [data-testid="stFileUploaderDropzone"] {background:#fffaf2!important}
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) [data-testid="stFileUploaderDropzone"] {background:#faf8fd!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) {background:#dcecff!important;border-color:#9fc5ee!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) {background:#d9f0df!important;border-color:#a9d6b3!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) {background:#ffedc7!important;border-color:#e5bd78!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) {background:#e9def7!important;border-color:#c9afe5!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-tutti) [data-testid="stFileUploaderDropzone"] {background:#edf6ff!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-sala) [data-testid="stFileUploaderDropzone"] {background:#eef9f1!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-cucina) [data-testid="stFileUploaderDropzone"] {background:#fff5df!important}
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) textarea, div[data-testid="stVerticalBlockBorderWrapper"]:has(.note-block-magazzino) [data-testid="stFileUploaderDropzone"] {background:#f4edfb!important}
     </style>
     """, unsafe_allow_html=True)
     mf_priv_mod = []
     if (str_lit.session_state.get("utente_loggato") or {}).get("ruolo") == "Amministratore":
-      str_lit.markdown("<div style='padding:8px 10px;border-radius:8px;background:#f4f0fa;border:1px solid #e3d8f0;font-weight:700;color:#344054;margin:8px 0 4px'>Cartella privata Admin</div>", unsafe_allow_html=True)
+      str_lit.markdown("<div style='padding:8px 10px;border-radius:8px;background:#e9def7;border:1px solid #c9afe5;font-weight:700;color:#344054;margin:8px 0 4px'>Cartella privata Admin</div>", unsafe_allow_html=True)
       mf_priv_mod = str_lit.file_uploader("Aggiungi allegati alla Cartella privata Admin", accept_multiple_files=True, type=["png", "jpg", "jpeg", "pdf"], key=f"dialog_up_privati_{idx_ev}")
 
     def comp_sezione_modifica(titolo_rep, chiave_testo, chiave_all):
-      colori_rep = {"Note per tutti": ("#eef5ff", "#cfe0f6"), "Note per la sala": ("#f0f8f2", "#d6eadb"), "Note per la cucina": ("#fff7eb", "#f2dfbd"), "Note per il magazzino": ("#f4f0fa", "#e3d8f0")}
+      colori_rep = {"Note per tutti": ("#dcecff", "#9fc5ee"), "Note per la sala": ("#d9f0df", "#a9d6b3"), "Note per la cucina": ("#ffedc7", "#e5bd78"), "Note per il magazzino": ("#e9def7", "#c9afe5")}
       sfondo_rep, bordo_rep = colori_rep.get(titolo_rep, ("#f7f8fb", "#e5e9f0"))
       t_curr = ev_mod.get(chiave_testo, "")
       a_curr = ev_mod.get(chiave_all, [])
@@ -3187,7 +3183,7 @@ else:
               str_lit.markdown("---")
 
               def mostra_sezione_note(titolo, testo, allegati, funzione_colore, prefisso):
-                colori_rep = {"Note per tutti": ("#eef5ff", "#cfe0f6"), "Note per la sala": ("#f0f8f2", "#d6eadb"), "Note per la cucina": ("#fff7eb", "#f2dfbd"), "Note per il magazzino": ("#f4f0fa", "#e3d8f0")}
+                colori_rep = {"Note per tutti": ("#dcecff", "#9fc5ee"), "Note per la sala": ("#d9f0df", "#a9d6b3"), "Note per la cucina": ("#ffedc7", "#e5bd78"), "Note per il magazzino": ("#e9def7", "#c9afe5")}
                 sfondo_rep, bordo_rep = colori_rep.get(titolo, ("#f7f8fb", "#e5e9f0"))
                 str_lit.markdown(f"<div style='padding:8px 10px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:700;color:#344054;margin:8px 0 4px'>{titolo}</div>", unsafe_allow_html=True)
                 testo_sicuro = html.escape(str(testo or "Nessuna nota.")).replace("\n", "<br>")
