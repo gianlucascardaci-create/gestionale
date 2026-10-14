@@ -5,10 +5,14 @@ from io import BytesIO
 import json
 import html
 import os
+import hashlib
+import hmac
+import secrets
 import socket
 import uuid
 import difflib
 import re
+import textwrap
 import unicodedata
 import qrcode
 import streamlit as str_lit
@@ -20,7 +24,15 @@ except ImportError:
 from supabase import create_client, Client
 import requests
 from urllib.parse import quote
+try:
+  from PIL import Image
+except ImportError:
+  Image = None
 
+try:
+  from pypdf import PdfReader, PdfWriter
+except ImportError:
+  PdfReader = PdfWriter = None
 try:
   from reportlab.lib import colors
   from reportlab.lib.pagesizes import letter
@@ -40,7 +52,12 @@ str_lit.set_page_config(
 # ==============================================================================
 try:
     SUPABASE_URL = str_lit.secrets["SUPABASE_URL"]
-    SUPABASE_KEY = str_lit.secrets["SUPABASE_KEY"]
+    # Accetta sia il nome nuovo sia quello usato nella configurazione
+    # precedente, così l'app non smette di leggere Supabase dopo l'aggiornamento.
+    SUPABASE_SERVICE_ROLE_KEY = str_lit.secrets.get(
+        "SUPABASE_SERVICE_ROLE_KEY",
+        str_lit.secrets.get("SUPABASE_KEY", "")
+    )
 except Exception:
     str_lit.error("Configurare SUPABASE_URL e SUPABASE_KEY nei Secrets di Streamlit.")
     str_lit.stop()
@@ -49,13 +66,48 @@ BUCKET_ALLEGATI_NOLEGGI = "allegati_noleggi"
 
 @str_lit.cache_resource
 def init_supabase() -> Client:
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
+    return create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-if not SUPABASE_URL or not SUPABASE_KEY:
-    str_lit.error("⚠️ Sostituisci SUPABASE_URL e SUPABASE_KEY con le tue credenziali reali.")
+if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+    str_lit.error("⚠️ Configurare SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY nei Secrets di Streamlit.")
     str_lit.stop()
 
 supabase = init_supabase()
+
+PASSWORD_SCHEME = "pbkdf2_sha256"
+PASSWORD_ITERATIONS = 310000
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PASSWORD_ITERATIONS)
+    return f"{PASSWORD_SCHEME}${PASSWORD_ITERATIONS}${salt.hex()}${digest.hex()}"
+
+def verifica_password(password: str, valore_salvato: str) -> bool:
+    if not valore_salvato:
+        return False
+    if not valore_salvato.startswith(f"{PASSWORD_SCHEME}$"):
+        return hmac.compare_digest(valore_salvato, password)
+    try:
+        _, iterazioni, salt_hex, digest_hex = valore_salvato.split("$", 3)
+        digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), bytes.fromhex(salt_hex), int(iterazioni))
+        return hmac.compare_digest(digest.hex(), digest_hex)
+    except (ValueError, TypeError):
+        return False
+
+@str_lit.cache_resource
+def migra_password_storiche():
+    try:
+        risultato = supabase.table("utenti_autorizzati").select("id,password").limit(1000).execute()
+        for utente in (risultato.data or []):
+            valore = utente.get("password") or ""
+            if valore and not valore.startswith(f"{PASSWORD_SCHEME}$"):
+                supabase.table("utenti_autorizzati").update({"password": hash_password(valore)}).eq("id", utente["id"]).execute()
+    except Exception as errore:
+        str_lit.error(f"Migrazione password non completata: {errore}")
+        str_lit.stop()
+
+migra_password_storiche()
+
 
 str_lit.markdown(
     """
@@ -323,6 +375,7 @@ CATEGORIE_PRODOTTI = [
     "TAVOLI",
     "SEDIE",
     "CALTAGIRONE",
+    "COMPLEMENTI VARI",
     "PIATTI E SOTTOPIATTI",
     "BICCHIERI",
     "CUCINA",
@@ -518,7 +571,11 @@ def salva_prodotto_singolo(prodotto):
 
 
 def salva_utente_singolo(username, dati):
-  payload = {"username": username, "password": dati.get("password"), "ruolo": dati.get("ruolo"), "nome": dati.get("nome"), "email": dati.get("email")}
+  valore_password = dati.get("password") or ""
+  if valore_password and not valore_password.startswith(f"{PASSWORD_SCHEME}$"):
+    valore_password = hash_password(valore_password)
+    dati["password"] = valore_password
+  payload = {"username": username, "password": valore_password, "ruolo": dati.get("ruolo"), "nome": dati.get("nome"), "email": dati.get("email")}
   esistente = supabase.table("utenti_autorizzati").select("id").eq("username", username).limit(1).execute()
   if esistente.data:
     return bool(supabase.table("utenti_autorizzati").update(payload).eq("username", username).execute().data)
@@ -580,87 +637,118 @@ def elimina_noleggio_supabase(noleggio_id):
 def carica_dati_esterni():
   # La pagina QR è pubblica e deve essere immediata: non serve caricare
   # inventario, noleggi e utenti prima di leggere il singolo prodotto.
-  if str(str_lit.query_params.get("codice", "")).strip():
-    return {
-        "prodotti_noleggio": [],
-        "noleggi": [],
-        "eventi_catering": [],
-        "utenti_autorizzati": None,
-    }
+  # Anche quando l'URL contiene ?codice=... (pagina pubblica del QR), non
+  # restituiamo più un inventario vuoto: il parametro QR non deve influenzare
+  # il caricamento dei dati dell'app.
+  # Ogni tabella viene caricata separatamente: un errore in utenti o noleggi
+  # non deve mai trasformare l'inventario in una lista vuota.
+  prodotti = []
   try:
-    # Vengono richiesti solo i campi necessari; gli allegati restano nel DB
-    # ma non vengono caricati nella pagina del magazzino.
-    try:
-      res_prod = supabase.table("prodotti_noleggio").select(
-          "id,codice,nome,categoria,quantita,posizione,costo_noleggio,note,foto_path"
-      ).order("nome").execute()
-    except Exception:
-      # Compatibilità temporanea con Supabase prima dell'esecuzione della migrazione SQL.
-      res_prod = supabase.table("prodotti_noleggio").select(
-          "id,codice,nome,categoria,quantita,posizione,costo_noleggio,note,foto_path"
-      ).order("nome").execute()
+    # Struttura attuale.
+    res_prod = supabase.table("prodotti_noleggio").select(
+        "id,codice,nome,categoria,quantita,posizione,costo_noleggio,note,foto_path"
+    ).order("nome").execute()
     prodotti = res_prod.data or []
-    for prodotto in prodotti:
-      scheda_precedente = dati_scheda_tecnica(prodotto.get("scheda_tecnica"))
-      campi_db = {
-          "materiale": prodotto.get("scheda_materiale"),
-          "colore": prodotto.get("scheda_colore"),
-          "dimensione": prodotto.get("scheda_dimensione"),
-          "note": prodotto.get("scheda_note"),
-      }
-      scheda = campi_db if any(valore not in (None, "") for valore in campi_db.values()) else scheda_precedente
-      prodotto["scheda_tecnica"] = json.dumps(scheda, ensure_ascii=False)
+  except Exception:
     try:
+      # Compatibilità con la struttura iniziale: descrizione, prezzo, foto_url.
       try:
-        res_nol = supabase.table("noleggi").select(
-            "id,titolo,inizio,fine,stato,location,referente,telefono,note,bolla,ddt,vario,bolla_url,ddt_url,vario_url,bolla_mime,ddt_mime,vario_mime"
-        ).order("inizio").execute()
+        res_prod = supabase.table("prodotti_noleggio").select(
+            "id,codice,nome,categoria,descrizione,quantita,prezzo,foto_url"
+        ).order("nome").execute()
       except Exception:
-        # Compatibilità con la tabella precedente alla migrazione Storage.
-        res_nol = supabase.table("noleggi").select(
-            "id,titolo,inizio,fine,stato,location,referente,telefono,note,bolla,ddt,vario,bolla_mime,ddt_mime,vario_mime"
-        ).order("inizio").execute()
-      noleggi = [normalizza_noleggio_db(r) for r in (res_nol.data or [])]
-    except Exception as errore_noleggi:
-      str_lit.error(f"Errore caricamento tabella noleggi da Supabase: {errore_noleggi}")
-      noleggi = []
+        # Struttura SQL originale: non include categoria né posizione.
+        res_prod = supabase.table("prodotti_noleggio").select(
+            "id,codice,nome,descrizione,quantita,prezzo,foto_url"
+        ).order("nome").execute()
+      prodotti = []
+      for prodotto_vecchio in (res_prod.data or []):
+        prodotti.append({
+            "id": prodotto_vecchio.get("id"),
+            "codice": prodotto_vecchio.get("codice"),
+            "nome": prodotto_vecchio.get("nome"),
+            "categoria": prodotto_vecchio.get("categoria") or "",
+            "quantita": prodotto_vecchio.get("quantita"),
+            "posizione": prodotto_vecchio.get("posizione") or "",
+            "costo_noleggio": prodotto_vecchio.get("prezzo") or 0,
+            "note": prodotto_vecchio.get("descrizione") or "",
+            "foto_path": prodotto_vecchio.get("foto_url") or "",
+        })
+    except Exception as errore_prodotti:
+      str_lit.error(f"Errore caricamento inventario da Supabase: {errore_prodotti}")
+      prodotti = []
 
-    # Gli eventi vengono caricati solo entrando nella sezione Catering o Liste.
-    eventi = []
+  # I campi tecnici sono opzionali e non devono bloccare il catalogo.
+  for prodotto in prodotti:
+    prodotto["scheda_tecnica"] = json.dumps({
+        "materiale": prodotto.get("scheda_materiale") or "",
+        "colore": prodotto.get("scheda_colore") or "",
+        "dimensione": prodotto.get("scheda_dimensione") or "",
+        "note": prodotto.get("scheda_note") or "",
+    }, ensure_ascii=False)
 
-    res_usr = supabase.table("utenti_autorizzati").select(
-        "id,username,password,ruolo,nome,email"
-    ).execute()
-    utenti = {}
+  noleggi = []
+  try:
+    try:
+      res_nol = supabase.table("noleggi").select(
+          "id,titolo,inizio,fine,stato,location,referente,telefono,note,bolla,ddt,vario,bolla_url,ddt_url,vario_url,bolla_mime,ddt_mime,vario_mime"
+      ).order("inizio").execute()
+    except Exception:
+      res_nol = supabase.table("noleggi").select(
+          "id,titolo,inizio,fine,stato,location,referente,telefono,note,bolla,ddt,vario,bolla_mime,ddt_mime,vario_mime"
+      ).order("inizio").execute()
+    noleggi = [normalizza_noleggio_db(r) for r in (res_nol.data or [])]
+  except Exception as errore_noleggi:
+    str_lit.warning(f"Noleggi non caricati: {errore_noleggi}")
+
+  # Gli eventi vengono caricati solo entrando nella sezione Catering o Liste.
+  eventi = []
+
+  utenti = {}
+  try:
+    try:
+      res_usr = supabase.table("utenti_autorizzati").select(
+          "id,username,password,ruolo,nome,email"
+      ).execute()
+    except Exception:
+      # Compatibilità con la vecchia tabella che aveva solo username/password.
+      res_usr = supabase.table("utenti_autorizzati").select(
+          "id,username,password"
+      ).execute()
     for u in (res_usr.data or []):
       username = u.get("username")
       if username:
         utenti[username] = {
             "id": u.get("id"),
             "password": u.get("password"),
-            "ruolo": u.get("ruolo"),
-            "nome": u.get("nome"),
-            "email": u.get("email"),
+            "ruolo": u.get("ruolo") or "",
+            "nome": u.get("nome") or username,
+            "email": u.get("email") or "",
         }
+  except Exception as errore_utenti:
+    str_lit.warning(f"Utenti non caricati: {errore_utenti}")
 
-    return {
-        "prodotti_noleggio": prodotti,
-        "noleggi": noleggi,
-        "eventi_catering": eventi,
-        "utenti_autorizzati": utenti if utenti else None,
-    }
-  except Exception as e:
-    str_lit.error(f"Errore di caricamento dati da Supabase: {e}")
-    return {"prodotti_noleggio": [], "eventi_catering": [], "utenti_autorizzati": None}
+  return {
+      "prodotti_noleggio": prodotti,
+      "noleggi": noleggi,
+      "eventi_catering": eventi,
+      "utenti_autorizzati": utenti if utenti else None,
+  }
 
 
 @str_lit.cache_data(ttl=600, show_spinner=False)
 def carica_eventi_solo_quando_servono():
   """Carica gli eventi solo quando viene aperta una sezione che li usa."""
   try:
-    eventi = supabase.table("eventi_catering").select(
-        "id,nome_evento,data,data_display,location,ospiti,bambini,staff,note_tutti,allegati_tutti,note_sala,allegati_sala,note_cucina,allegati_cucina,note_magazzino,allegati_magazzino"
-    ).order("data").execute().data or []
+    try:
+      risposta = supabase.table("eventi_catering").select(
+          "id,nome_evento,data,data_display,location,ospiti,bambini,staff,note_tutti,allegati_tutti,note_sala,allegati_sala,note_cucina,allegati_cucina,note_magazzino,allegati_magazzino,allegati_privati"
+      ).order("data").execute()
+    except Exception:
+      risposta = supabase.table("eventi_catering").select(
+          "id,nome_evento,data,data_display,location,ospiti,bambini,staff,note_tutti,allegati_tutti,note_sala,allegati_sala,note_cucina,allegati_cucina,note_magazzino,allegati_magazzino"
+      ).order("data").execute()
+    eventi = risposta.data or []
     return [migra_allegati_evento_legacy(evento) for evento in eventi]
   except Exception as e:
     str_lit.error(f"Errore di caricamento eventi da Supabase: {e}")
@@ -697,7 +785,7 @@ def salva_dati_esterni():
           "nome_evento", "data", "data_display", "location", "ospiti",
           "bambini", "staff", "note_tutti", "allegati_tutti", "note_sala",
           "allegati_sala", "note_cucina", "allegati_cucina",
-          "note_magazzino", "allegati_magazzino")}
+          "note_magazzino", "allegati_magazzino", "allegati_privati")}
       payload = {k: v for k, v in payload.items() if v is not None}
       if ev.get("id"):
         res = supabase.table("eventi_catering").update(payload).eq("id", ev["id"]).execute()
@@ -735,7 +823,7 @@ def salva_evento_singolo(ev):
         "nome_evento", "data", "data_display", "location", "ospiti",
         "bambini", "staff", "note_tutti", "allegati_tutti", "note_sala",
         "allegati_sala", "note_cucina", "allegati_cucina",
-        "note_magazzino", "allegati_magazzino")}
+        "note_magazzino", "allegati_magazzino", "allegati_privati")}
     payload = {k: v for k, v in payload.items() if v is not None}
     if ev.get("id"):
       res = supabase.table("eventi_catering").update(payload).eq("id", ev["id"]).execute()
@@ -881,6 +969,68 @@ def dati_allegato_noleggio(noleggio, campo):
   return base64.b64decode(dati_b64) if dati_b64 else b""
 
 
+def lista_allegati_noleggio(noleggio, campo):
+  """Legge più allegati per tipo mantenendo compatibilità col vecchio file singolo."""
+  valore = noleggio.get(campo)
+  if isinstance(valore, list):
+    return valore
+  if isinstance(valore, str) and valore.strip().startswith("["):
+    try:
+      elenco = json.loads(valore)
+      if isinstance(elenco, list):
+        urls = noleggio.get(f"{campo}_url") or ""
+        mimes = noleggio.get(f"{campo}_mime") or ""
+        b64s = noleggio.get(f"{campo}_dati_b64") or ""
+        try: urls = json.loads(urls) if isinstance(urls, str) else urls
+        except Exception: urls = []
+        try: mimes = json.loads(mimes) if isinstance(mimes, str) else mimes
+        except Exception: mimes = []
+        try: b64s = json.loads(b64s) if isinstance(b64s, str) else b64s
+        except Exception: b64s = []
+        return [{
+            "nome_file": str(nome),
+            "url": urls[i] if isinstance(urls, list) and i < len(urls) else "",
+            "mime": mimes[i] if isinstance(mimes, list) and i < len(mimes) else "application/octet-stream",
+            "dati_b64": b64s[i] if isinstance(b64s, list) and i < len(b64s) else "",
+        } for i, nome in enumerate(elenco)]
+    except (TypeError, ValueError, json.JSONDecodeError):
+      pass
+  if not valore or valore == "Nessun file":
+    return []
+  return [{
+      "nome_file": str(valore),
+      "url": noleggio.get(f"{campo}_url") or "",
+      "mime": noleggio.get(f"{campo}_mime") or "application/octet-stream",
+      "dati_b64": noleggio.get(f"{campo}_dati_b64") or "",
+  }]
+
+
+def dati_allegato_noleggio_item(allegato):
+  """Recupera i bytes di un elemento della lista allegati."""
+  url = allegato.get("url") or ""
+  if url:
+    try:
+      risposta = requests.get(url, timeout=15)
+      if risposta.ok:
+        return risposta.content
+    except Exception:
+      pass
+  dati_b64 = allegato.get("dati_b64") or ""
+  try:
+    return base64.b64decode(dati_b64) if dati_b64 else b""
+  except Exception:
+    return b""
+
+
+def salva_lista_allegati_noleggio(noleggio, campo, allegati):
+  """Salva la lista nei campi text esistenti senza richiedere una migrazione SQL."""
+  allegati = allegati or []
+  noleggio[campo] = json.dumps([a.get("nome_file", "allegato") for a in allegati], ensure_ascii=False) if allegati else "Nessun file"
+  noleggio[f"{campo}_url"] = json.dumps([a.get("url", "") for a in allegati], ensure_ascii=False) if allegati else ""
+  noleggio[f"{campo}_mime"] = json.dumps([a.get("mime", "application/octet-stream") for a in allegati], ensure_ascii=False) if allegati else "application/octet-stream"
+  noleggio[f"{campo}_dati_b64"] = json.dumps([a.get("dati_b64", "") for a in allegati], ensure_ascii=False) if allegati else ""
+
+
 def processa_allegati_evento(files):
   """Memorizza negli eventi solo URL Storage, mai il Base64 del file."""
   risultato = []
@@ -904,6 +1054,86 @@ def dati_allegato_evento(allegato):
       pass
   dati_b64 = allegato.get("dati_b64") or ""
   return base64.b64decode(dati_b64) if dati_b64 else b""
+
+
+def mostra_preview_bytes(nome_file, mime, dati, chiave):
+  """Anteprima affidabile per immagini/PDF, con download solo dopo l'apertura."""
+  nome_file = str(nome_file or "allegato")
+  mime = str(mime or "application/octet-stream")
+  if mime == "application/octet-stream" and "." in nome_file:
+    estensione = nome_file.lower().rsplit(".", 1)[-1]
+    mime = {"pdf": "application/pdf", "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg"}.get(estensione, mime)
+  if not dati:
+    str_lit.warning(f"Anteprima non disponibile per {nome_file}.")
+    return
+  preview_key = f"{chiave}:{nome_file}"
+  if str_lit.button(f"👁️ Apri anteprima · {nome_file}", key=f"apri_anteprima_{chiave}_{nome_file}", use_container_width=True):
+    str_lit.session_state.anteprima_allegato_evento = {"chiave": preview_key, "mime": mime, "nome_file": nome_file, "dati_b64": base64.b64encode(dati).decode("ascii")}
+    str_lit.rerun()
+  anteprima = str_lit.session_state.get("anteprima_allegato_evento") or {}
+  if anteprima.get("chiave") != preview_key:
+    return
+  dati_preview = base64.b64decode(anteprima.get("dati_b64", ""))
+  if mime.startswith("image/"):
+    str_lit.image(dati_preview, caption=nome_file, use_container_width=True)
+  elif mime == "application/pdf":
+    if convert_from_bytes:
+      try:
+        pagina = convert_from_bytes(dati_preview, dpi=110, first_page=1, last_page=1)[0]
+        str_lit.image(pagina, caption=f"Anteprima prima pagina · {nome_file}", use_container_width=True)
+      except Exception:
+        str_lit.info("Il PDF è stato caricato ma non è possibile renderizzare la prima pagina.")
+    else:
+      str_lit.info("Anteprima PDF non disponibile in questa installazione.")
+  else:
+    str_lit.info("Anteprima non disponibile per questo formato.")
+  col_preview_1, col_preview_2 = str_lit.columns([3, 1])
+  with col_preview_1:
+    str_lit.download_button("📥 Scarica allegato", data=dati_preview, file_name=nome_file, mime=mime, key=f"download_preview_{chiave}_{nome_file}", use_container_width=True)
+  with col_preview_2:
+    if str_lit.button("Chiudi", key=f"chiudi_anteprima_{chiave}_{nome_file}", use_container_width=True):
+      str_lit.session_state.anteprima_allegato_evento = None
+      str_lit.rerun()
+
+
+def mostra_preview_allegato_evento(allegato, chiave):
+  nome_file = str(allegato.get("nome_file") or "allegato")
+  dati = dati_allegato_evento(allegato)
+  mime = allegato.get("mime", "application/octet-stream")
+  if not dati:
+    str_lit.warning(f"Allegato non disponibile: {nome_file}")
+    return
+  if mime == "application/octet-stream" and "." in nome_file:
+    estensione = nome_file.lower().rsplit(".", 1)[-1]
+    mime = {"pdf": "application/pdf", "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg"}.get(estensione, mime)
+  str_lit.download_button(
+      f"📥 Scarica {nome_file}",
+      data=dati,
+      file_name=nome_file,
+      mime=mime,
+      key=f"download_evento_{chiave}_{nome_file}",
+      use_container_width=True,
+  )
+
+
+def mostra_download_bytes(nome_file, mime, dati, chiave):
+  """Mostra soltanto il download dell'allegato, senza anteprima PDF."""
+  nome_file = str(nome_file or "allegato")
+  mime = str(mime or "application/octet-stream")
+  if mime == "application/octet-stream" and "." in nome_file:
+    estensione = nome_file.lower().rsplit(".", 1)[-1]
+    mime = {"pdf": "application/pdf", "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg"}.get(estensione, mime)
+  if not dati:
+    str_lit.warning(f"Allegato non disponibile: {nome_file}")
+    return
+  str_lit.download_button(
+      f"📥 Scarica {nome_file}",
+      data=dati,
+      file_name=nome_file,
+      mime=mime,
+      key=f"download_solo_{chiave}_{nome_file}",
+      use_container_width=True,
+  )
 
 
 def migra_allegati_evento_legacy(evento):
@@ -1261,44 +1491,48 @@ if "utenti_autorizzati" not in str_lit.session_state:
   else:
     str_lit.session_state.utenti_autorizzati = {
         "admin": {
-            "password": "123",
+            "password": hash_password("123"),
             "ruolo": "Amministratore",
             "nome": "Gianluca (Admin)",
             "email": "admin@gestionale.it",
         },
         "wedding": {
-            "password": "wedding123",
+            "password": hash_password("wedding123"),
             "ruolo": "Wedding",
             "nome": "Cristina (Wedding Planner)",
             "email": "wedding@gestionale.it",
         },
         "cucina": {
-            "password": "cucina123",
+            "password": hash_password("cucina123"),
             "ruolo": "Cucina",
             "nome": "Chef Cucina",
             "email": "cucina@gestionale.it",
         },
         "sala": {
-            "password": "sala123",
+            "password": hash_password("sala123"),
             "ruolo": "Sala",
             "nome": "Responsabile Sala",
             "email": "sala@gestionale.it",
         },
         "magazzino": {
-            "password": "mag123",
+            "password": hash_password("mag123"),
             "ruolo": "Magazzino",
             "nome": "Addetto Magazzino",
             "email": "magazzino@gestionale.it",
         },
         "magazzino2": {
-            "password": "mag2123",
+            "password": hash_password("mag2123"),
             "ruolo": "Magazzino2",
             "nome": "Assistente Magazzino",
             "email": "magazzino2@gestionale.it",
         },
     }
 
-if "prodotti_noleggio" not in str_lit.session_state:
+if "prodotti_noleggio" not in str_lit.session_state or (
+    not str_lit.session_state.get("prodotti_noleggio")
+    and dati_salvati
+    and dati_salvati.get("prodotti_noleggio")
+):
   if dati_salvati and "prodotti_noleggio" in dati_salvati:
     str_lit.session_state.prodotti_noleggio = dati_salvati["prodotti_noleggio"]
   else:
@@ -1395,13 +1629,19 @@ def modale_crea_noleggio_demo(data_selezionata):
       ora_fine = str_lit.time_input("Ora fine")
       stato = str_lit.selectbox("Stato", ["Confermato", "Non confermato"])
       note = str_lit.text_area("Note varie")
-    a1, a2, a3 = str_lit.columns(3)
-    with a1:
-      bolla = str_lit.file_uploader("Bolla con prezzo", type=["pdf", "jpg", "jpeg", "png"])
-    with a2:
-      ddt = str_lit.file_uploader("DDT", type=["pdf", "jpg", "jpeg", "png"])
-    with a3:
-      vario = str_lit.file_uploader("Vario", type=["pdf", "jpg", "jpeg", "png"])
+    str_lit.markdown("#### 📎 Allegati del noleggio")
+    def uploader_noleggio_creazione(etichetta, chiave):
+      with str_lit.container(border=True):
+        str_lit.markdown(f"**{etichetta}**")
+        return str_lit.file_uploader(
+            f"Aggiungi {etichetta} (facoltativo)",
+            accept_multiple_files=True,
+            type=["pdf", "jpg", "jpeg", "png"],
+            key=f"crea_noleggio_{chiave}",
+        )
+    bolla = uploader_noleggio_creazione("Bolla con prezzo", "bolla")
+    ddt = uploader_noleggio_creazione("DDT", "ddt")
+    vario = uploader_noleggio_creazione("Vario", "vario")
     salva = str_lit.form_submit_button("Salva noleggio", type="primary", use_container_width=True)
   if salva:
     if not titolo.strip() or not location.strip() or not referente.strip() or not telefono.strip():
@@ -1411,13 +1651,16 @@ def modale_crea_noleggio_demo(data_selezionata):
           "id": None, "titolo": titolo, "inizio": datetime.combine(data_inizio, ora_inizio),
           "fine": datetime.combine(data_fine, ora_fine), "stato": "confermato" if stato == "Confermato" else "non confermato",
           "location": location, "referente": referente, "telefono": telefono, "note": note,
-          "bolla": bolla.name if bolla else "Nessun file", "ddt": ddt.name if ddt else "Nessun file", "vario": vario.name if vario else "Nessun file",
-          "bolla_url": salva_allegato_noleggio_su_storage(bolla) if bolla else "",
-          "ddt_url": salva_allegato_noleggio_su_storage(ddt) if ddt else "",
-          "vario_url": salva_allegato_noleggio_su_storage(vario) if vario else "",
-          "bolla_mime": bolla.type if bolla else "application/octet-stream",
-          "ddt_mime": ddt.type if ddt else "application/octet-stream",
-          "vario_mime": vario.type if vario else "application/octet-stream"}
+          "bolla": "Nessun file", "ddt": "Nessun file", "vario": "Nessun file"}
+      for campo, files in (("bolla", bolla), ("ddt", ddt), ("vario", vario)):
+        elenco = []
+        for file in files or []:
+          elenco.append({
+              "nome_file": file.name,
+              "url": salva_allegato_noleggio_su_storage(file),
+              "mime": file.type or "application/octet-stream",
+          })
+        salva_lista_allegati_noleggio(nuovo_noleggio, campo, elenco)
       try:
         if not salva_noleggio_supabase(nuovo_noleggio):
           raise RuntimeError("Supabase non ha restituito il noleggio salvato")
@@ -1448,7 +1691,7 @@ def modale_modifica_noleggio_demo(noleggio_id):
   )
   if not puo_modificare:
     str_lit.info("Modalità sola visualizzazione.")
-  if is_magazzino1:
+  if not puo_modificare:
     stato_testo = "Confermato" if noleggio.get("stato") == "confermato" else "Non confermato"
     colore_stato = "success" if noleggio.get("stato") == "confermato" else "warning"
     str_lit.markdown(f"## {noleggio.get('titolo', 'Noleggio')}")
@@ -1471,20 +1714,13 @@ def modale_modifica_noleggio_demo(noleggio_id):
     allegati_magazzino = [("DDT", "ddt"), ("Vario", "vario")]
     presenti = False
     for etichetta, campo in allegati_magazzino:
-      nome = noleggio.get(campo) or "Nessun file"
-      if nome != "Nessun file":
+      for indice_allegato, allegato in enumerate(lista_allegati_noleggio(noleggio, campo)):
+        nome = allegato.get("nome_file") or "allegato"
         presenti = True
-        dati = dati_allegato_noleggio(noleggio, campo)
-        mime = noleggio.get(f"{campo}_mime", "application/octet-stream")
+        dati = dati_allegato_noleggio_item(allegato)
+        mime = allegato.get("mime", "application/octet-stream")
         str_lit.markdown(f"**{etichetta}:** `{nome}`")
-        str_lit.download_button(
-            f"📥 Scarica allegato {etichetta}",
-            data=dati if dati else f"Allegato: {nome}".encode("utf-8"),
-            file_name=nome,
-            mime=mime,
-            key=f"magazzino_download_{noleggio_id}_{campo}",
-            use_container_width=True,
-        )
+        mostra_download_bytes(nome, mime, dati, f"noleggio_magazzino_{noleggio_id}_{campo}_{indice_allegato}")
     if not presenti:
       str_lit.info("Nessun allegato disponibile.")
     return
@@ -1522,14 +1758,8 @@ def modale_modifica_noleggio_demo(noleggio_id):
       ora_fine = str_lit.time_input("Ora fine", noleggio["fine"].time(), disabled=not puo_modificare)
       stato = str_lit.selectbox("Stato", ["Confermato", "Non confermato"], index=0 if noleggio["stato"] == "confermato" else 1, disabled=not puo_modificare)
       note = str_lit.text_area("Note varie", noleggio["note"], disabled=not puo_modificare)
-    str_lit.markdown("#### Allegati")
-    if ruolo_corrente in {"Amministratore", "Magazzino2"}:
-      str_lit.write(f"Bolla con prezzo: `{noleggio['bolla']}`")
-    if ruolo_corrente in {"Amministratore", "Magazzino2", "Magazzino"}:
-      str_lit.write(f"DDT: `{noleggio['ddt']}`")
-      str_lit.write(f"Vario: `{noleggio['vario']}`")
     if puo_modificare:
-      str_lit.markdown("#### Aggiungi o rimuovi allegati")
+      str_lit.markdown("#### 📎 Sostituisci allegati")
       campi_upload = []
       if ruolo_corrente in {"Amministratore", "Magazzino2"}:
         campi_upload.append(("Bolla con prezzo", "bolla"))
@@ -1537,22 +1767,13 @@ def modale_modifica_noleggio_demo(noleggio_id):
       for etichetta_upload, campo_upload in campi_upload:
         with str_lit.container(border=True):
           str_lit.markdown(f"**{etichetta_upload}**")
-          file_esistente = noleggio.get(campo_upload) or "Nessun file"
-          mantieni = True
-          if file_esistente != "Nessun file":
-            str_lit.markdown("📁 *Allegato esistente (deseleziona per rimuovere):*")
-            mantieni = str_lit.checkbox(
-                f"Mantieni: {file_esistente}",
-                value=True,
-                key=f"mantieni_{campo_upload}_{noleggio_id}",
-            )
           nuovo_file = str_lit.file_uploader(
-              f"Aggiungi nuovi allegati - {etichetta_upload}",
-              accept_multiple_files=False,
+              f"Aggiungi allegati {etichetta_upload} (facoltativo)",
+              accept_multiple_files=True,
               type=["pdf", "jpg", "jpeg", "png"],
               key=f"upload_{campo_upload}_{noleggio_id}",
           )
-        allegati_modifica[campo_upload] = (mantieni, nuovo_file)
+        allegati_modifica[campo_upload] = nuovo_file
     col_comandi1, col_comandi2 = str_lit.columns(2)
     with col_comandi1:
       salva = str_lit.form_submit_button("Salva modifiche", type="primary", use_container_width=True, disabled=not puo_modificare)
@@ -1565,28 +1786,46 @@ def modale_modifica_noleggio_demo(noleggio_id):
   if ruolo_corrente in {"Amministratore", "Magazzino2", "Magazzino"}:
     allegati_visibili.extend([("DDT", "ddt"), ("Vario", "vario")])
   for etichetta_allegato, campo_allegato in allegati_visibili:
-    nome_allegato = noleggio.get(campo_allegato) or "Nessun file"
-    with str_lit.container(border=True):
-      str_lit.markdown(f"**{etichetta_allegato}:** `{nome_allegato}`")
-      if nome_allegato != "Nessun file":
-        dati_b64 = dati_allegato_noleggio(noleggio, campo_allegato)
-        mime_allegato = noleggio.get(f"{campo_allegato}_mime", "application/octet-stream")
-        dati_download = dati_b64 if dati_b64 else f"Allegato demo: {nome_allegato}".encode("utf-8")
-        str_lit.download_button("📥 Scarica allegato", data=dati_download, file_name=nome_allegato, mime=mime_allegato, key=f"scarica_demo_{noleggio_id}_{campo_allegato}", use_container_width=True)
+    for indice_allegato, allegato in enumerate(lista_allegati_noleggio(noleggio, campo_allegato)):
+      nome_allegato = allegato.get("nome_file") or "allegato"
+      with str_lit.container(border=True):
+        str_lit.markdown(f"**{etichetta_allegato}:** `{nome_allegato}`")
+        dati_download = dati_allegato_noleggio_item(allegato)
+        mime_allegato = allegato.get("mime", "application/octet-stream")
+        col_download, col_rimuovi = str_lit.columns([3, 1])
+        with col_download:
+          mostra_download_bytes(nome_allegato, mime_allegato, dati_download, f"noleggio_{noleggio_id}_{campo_allegato}_{indice_allegato}")
+        with col_rimuovi:
+          if puo_modificare and str_lit.button("Rimuovi", key=f"rimuovi_noleggio_{noleggio_id}_{campo_allegato}_{indice_allegato}", use_container_width=True):
+            elenco = lista_allegati_noleggio(noleggio, campo_allegato)
+            elenco.pop(indice_allegato)
+            salva_lista_allegati_noleggio(noleggio, campo_allegato, elenco)
+            salva_noleggio_supabase(noleggio)
+            str_lit.toast(f"{etichetta_allegato} rimosso")
+            str_lit.rerun()
 
   if salva:
     noleggio.update({"titolo": titolo, "inizio": datetime.combine(data_inizio, ora_inizio), "fine": datetime.combine(data_fine, ora_fine), "location": location, "referente": referente, "telefono": telefono, "note": note, "stato": "confermato" if stato == "Confermato" else "non confermato"})
-    for campo_upload, (mantieni, nuovo_file) in allegati_modifica.items():
-      if not mantieni:
-        noleggio[campo_upload] = "Nessun file"
-        noleggio[f"{campo_upload}_url"] = ""
-        noleggio[f"{campo_upload}_dati_b64"] = ""
-        noleggio[f"{campo_upload}_mime"] = "application/octet-stream"
+    for campo_upload, nuovo_file in allegati_modifica.items():
       if nuovo_file is not None:
-        noleggio[campo_upload] = nuovo_file.name
-        noleggio[f"{campo_upload}_url"] = salva_allegato_noleggio_su_storage(nuovo_file)
-        noleggio[f"{campo_upload}_dati_b64"] = ""
-        noleggio[f"{campo_upload}_mime"] = nuovo_file.type or "application/octet-stream"
+        allegati_esistenti = lista_allegati_noleggio(noleggio, campo_upload)
+        nomi_esistenti = {str(a.get("nome_file", "")).strip().lower() for a in allegati_esistenti}
+        hash_esistenti = {str(a.get("sha256", "")) for a in allegati_esistenti if a.get("sha256")}
+        nuovi = nuovo_file if isinstance(nuovo_file, list) else [nuovo_file]
+        for file in nuovi:
+          if not file:
+            continue
+          hash_file = hashlib.sha256(file.getvalue()).hexdigest()
+          if hash_file in hash_esistenti or (not hash_esistenti and file.name.strip().lower() in nomi_esistenti):
+            continue
+          allegati_esistenti.append({
+              "nome_file": file.name,
+              "url": salva_allegato_noleggio_su_storage(file),
+              "mime": file.type or "application/octet-stream",
+              "sha256": hash_file,
+          })
+          hash_esistenti.add(hash_file)
+        salva_lista_allegati_noleggio(noleggio, campo_upload, allegati_esistenti)
     try:
       salva_noleggio_supabase(noleggio)
     except Exception as errore:
@@ -1598,6 +1837,57 @@ def modale_modifica_noleggio_demo(noleggio_id):
   if puo_modificare and elimina_richiesto:
     str_lit.session_state.noleggio_demo_eliminazione_in_attesa = noleggio_id
     str_lit.rerun()
+
+
+def genera_pdf_cartella_privata(evento):
+  """Unisce PDF e immagini della cartella privata in un unico PDF multipagina."""
+  if not REPORTLAB_DISPONIBILE or PdfWriter is None or PdfReader is None:
+    return b""
+  writer = PdfWriter()
+  allegati = evento.get("allegati_privati") or []
+  for allegato in allegati:
+    dati = dati_allegato_evento(allegato)
+    if not dati:
+      continue
+    mime = allegato.get("mime", "application/octet-stream")
+    nome = allegato.get("nome_file", "allegato")
+    try:
+      if mime == "application/pdf" or str(nome).lower().endswith(".pdf"):
+        reader = PdfReader(BytesIO(dati))
+        for pagina in reader.pages:
+          writer.add_page(pagina)
+      else:
+        immagine = Image.open(BytesIO(dati)).convert("RGB")
+        pagina_buffer = BytesIO()
+        immagine.save(pagina_buffer, format="PDF")
+        reader = PdfReader(BytesIO(pagina_buffer.getvalue()))
+        for pagina in reader.pages:
+          writer.add_page(pagina)
+    except Exception:
+      continue
+  if not writer.pages:
+    return b""
+  risultato = BytesIO()
+  writer.write(risultato)
+  return risultato.getvalue()
+
+
+def mostra_cartella_privata_evento(evento):
+  if (str_lit.session_state.get("utente_loggato") or {}).get("ruolo") != "Amministratore":
+    return
+  str_lit.markdown("<div style='height:22px'></div>", unsafe_allow_html=True)
+  allegati = evento.get("allegati_privati") or []
+  str_lit.markdown("<div style='padding:9px 11px;border-radius:8px;background:#e9def7;border:1px solid #c9afe5;font-weight:700;color:#344054;margin:12px 0 5px'>Cartella privata Admin</div>", unsafe_allow_html=True)
+  str_lit.caption("Questa sezione è visibile solo all'Amministratore.")
+  if not allegati:
+    str_lit.info("Nessun documento privato inserito.")
+    return
+  str_lit.write(" · ".join(str(a.get("nome_file") or "Allegato") for a in allegati))
+  pdf_cartella = genera_pdf_cartella_privata(evento)
+  if pdf_cartella:
+    nome = re.sub(r"[^\w\s-]", "", str(evento.get("nome_evento") or "evento"), flags=re.UNICODE).strip().replace(" ", "_") or "evento"
+    str_lit.download_button("📚 Scarica cartella privata PDF multipagina", data=pdf_cartella, file_name=f"Cartella_Privata_{nome}.pdf", mime="application/pdf", key=f"cartella_privata_pdf_{evento.get('id', nome)}", use_container_width=True)
+  str_lit.markdown("<div style='height:22px;border-bottom:1px solid #d0d5dd'></div>", unsafe_allow_html=True)
 
 
 @str_lit.dialog("Dettaglio Evento Catering", width="large")
@@ -1618,8 +1908,12 @@ def modale_catering_da_calendario(evento):
     str_lit.markdown(f"**Staff:** {evento.get('staff', 0)}")
   str_lit.markdown("---")
   def mostra_note_calendario(titolo, campo_note, campo_allegati, chiave):
-    str_lit.markdown(f"### {titolo}")
-    str_lit.info(evento.get(campo_note) or f"Nessuna nota per {chiave}.")
+    colori_rep = {"Note per tutti": ("#dcecff", "#9fc5ee"), "Note per la sala": ("#d9f0df", "#a9d6b3"), "Note per la cucina": ("#ffedc7", "#e5bd78"), "Note per il magazzino": ("#e9def7", "#c9afe5")}
+    sfondo_rep, bordo_rep = colori_rep.get(titolo, ("#f7f8fb", "#e5e9f0"))
+    str_lit.markdown("<div style='height:22px'></div>", unsafe_allow_html=True)
+    str_lit.markdown(f"<div style='padding:10px 12px;border-radius:9px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:750;color:#344054;margin:0 0 7px'>{titolo}</div>", unsafe_allow_html=True)
+    testo_sicuro = html.escape(str(evento.get(campo_note) or f"Nessuna nota per {chiave}.")).replace("\n", "<br>")
+    str_lit.markdown(f"<div style='padding:12px 13px;border-radius:8px;background:#ffffff;border:1px solid #d0d5dd;color:#344054;min-height:42px'>{testo_sicuro}</div>", unsafe_allow_html=True)
     for indice, allegato in enumerate(evento.get(campo_allegati) or []):
       nome_allegato = allegato.get("nome_file", f"allegato_{chiave}_{indice}")
       dati_b64 = allegato.get("dati_b64", "")
@@ -1634,14 +1928,9 @@ def modale_catering_da_calendario(evento):
           pass
       if not dati_allegato and dati_b64:
         dati_allegato = base64.b64decode(dati_b64)
-      str_lit.download_button(
-          f"📥 Scarica allegato: {nome_allegato}",
-          data=dati_allegato,
-          file_name=nome_allegato,
-          mime=mime_allegato,
-          key=f"calendario_{chiave}_{evento.get('id', evento.get('nome_evento', 'evento'))}_{indice}",
-      )
+      mostra_download_bytes(nome_allegato, mime_allegato, dati_allegato, f"calendario_{chiave}_{evento.get('id', evento.get('nome_evento', 'evento'))}_{indice}")
 
+  mostra_cartella_privata_evento(evento)
   mostra_note_calendario("Note per tutti", "note_tutti", "allegati_tutti", "tutti")
   sezioni_visibili = {
       "Amministratore": [("Note per la sala", "note_sala", "allegati_sala", "sala"), ("Note per la cucina", "note_cucina", "allegati_cucina", "cucina"), ("Note per il magazzino", "note_magazzino", "allegati_magazzino", "magazzino")],
@@ -1750,7 +2039,7 @@ def mostra_noleggi_demo():
 
   str_lit.markdown("""
   <style>
-  .planner-header {background:linear-gradient(135deg,#f8fbff 0%,#eef6ff 100%); border:1px solid #d8e8f8; border-radius:10px; padding:7px 13px 6px; margin:2px 0 5px;}
+  .planner-header {background:linear-gradient(135deg,#edf6ff 0%,#eef6ff 100%); border:1px solid #d8e8f8; border-radius:10px; padding:7px 13px 6px; margin:2px 0 5px;}
   .planner-kicker {font-size:.56rem; letter-spacing:.13em; font-weight:800; color:#667085; margin-bottom:2px;}
   .planner-header h1 {font-size:1.08rem; color:#102a43; margin:0; letter-spacing:-.02em;}
   .planner-header p {font-size:.76rem; color:#627d98; margin:3px 0 0;}
@@ -1838,7 +2127,7 @@ def mostra_noleggi_demo():
                 tipo_evento, evento = eventi_giornata[0]
                 if tipo_evento == "catering":
                   str_lit.session_state.evento_catering_demo_selezionato = evento
-                elif not (evento.get("stato") != "confermato" and ruolo == "Magazzino"):
+                elif evento.get("id"):
                   str_lit.session_state.noleggio_demo_modifica = evento.get("id")
               str_lit.rerun()
           else:
@@ -1852,7 +2141,7 @@ def mostra_noleggi_demo():
       if str_lit.button(testo, key=f"planner_choice_{indice}", use_container_width=True):
         if tipo_evento == "catering":
           str_lit.session_state.evento_catering_demo_selezionato = evento
-        elif not (evento.get("stato") != "confermato" and ruolo == "Magazzino"):
+        elif evento.get("id"):
           str_lit.session_state.noleggio_demo_modifica = evento.get("id")
         str_lit.session_state.eventi_da_scegliere = []
         str_lit.rerun()
@@ -1913,54 +2202,59 @@ if codice_scansionato:
     note_qr = html.escape(str(prodotto_qr.get("note") or "Nessuna nota inserita."))
     nome_qr = html.escape(str(prodotto_qr.get("nome") or "Prodotto"))
     codice_qr = html.escape(str(prodotto_qr.get("codice") or "-"))
-    categoria_qr = html.escape(testo_categorie(prodotto_qr.get("categoria")))
-    posizione_qr = html.escape(str(prodotto_qr.get("posizione") or "-"))
     quantita_qr = html.escape(str(prodotto_qr.get("quantita") or 0))
     scheda_qr = dati_scheda_tecnica(prodotto_qr.get("scheda_tecnica"))
     scheda_qr.update({
-        "materiale": prodotto_qr.get("scheda_materiale") or scheda_qr.get("materiale", ""),
-        "colore": prodotto_qr.get("scheda_colore") or scheda_qr.get("colore", ""),
         "dimensione": prodotto_qr.get("scheda_dimensione") or scheda_qr.get("dimensione", ""),
         "note": prodotto_qr.get("scheda_note") or scheda_qr.get("note", ""),
     })
-    campi_scheda_qr = [("Materiale", scheda_qr.get("materiale")), ("Colore", scheda_qr.get("colore")), ("Dimensione", scheda_qr.get("dimensione")), ("Note tecniche", scheda_qr.get("note"))]
+    campi_scheda_qr = [("Dimensione", scheda_qr.get("dimensione")), ("Note tecniche", scheda_qr.get("note"))]
     scheda_tecnica_html = "".join(
         f"<div class='qr-tech-item'><span>{html.escape(etichetta)}</span><b>{html.escape(str(valore).strip())}</b></div>"
         for etichetta, valore in campi_scheda_qr if str(valore or "").strip()
     )
     if scheda_tecnica_html:
       scheda_tecnica_html = f"<div class='qr-tech-title'>Scheda tecnica</div><div class='qr-tech-grid'>{scheda_tecnica_html}</div>"
-    str_lit.markdown(f"""
+    html_scheda_qr = textwrap.dedent(f"""
     <style>
-      .qr-screen{{max-width:850px;min-height:calc(100vh - 72px);margin:0 auto;display:flex;align-items:center;color:#14213d}}
-      .qr-card{{width:100%;display:grid;grid-template-columns:240px 1fr;gap:24px;align-items:center;padding:20px 24px;border:1px solid #e4e7ec;border-radius:18px;background:#fff;box-shadow:0 8px 28px rgba(16,42,67,.08)}}
-      .qr-photo{{display:block;width:100%;height:220px;object-fit:contain;border-radius:12px;background:#f8fafc}}
+      #MainMenu, footer, header, [data-testid="stToolbar"], [data-testid="stStatusWidget"], [data-testid="stDecoration"], .stAppDeployButton, [class*="viewerBadge"], [class*="hostedBadge"], a[href*="streamlit.io"], a[href*="streamlit.app"], [aria-label*="Hosted"], [aria-label*="Created"]{{display:none !important;visibility:hidden !important;opacity:0 !important;height:0 !important;width:0 !important}}
+      html, body, #root, [data-testid="stApp"], [data-testid="stAppViewContainer"], [data-testid="stMain"], [data-testid="stAppViewBlockContainer"], section.main{{height:100vh !important;max-height:100vh !important;overflow:hidden !important}}
+      body{{overflow:hidden !important}}
+      .qr-screen{{max-width:900px;height:calc(100vh - 18px);max-height:calc(100vh - 18px);margin:0 auto;display:flex;align-items:center;color:#14213d;overflow:hidden}}
+      .qr-card{{width:100%;display:grid;grid-template-columns:minmax(190px,230px) minmax(0,1fr);gap:24px;align-items:start;padding:22px 26px;border:1px solid #e4e7ec;border-radius:18px;background:#fff;box-shadow:0 8px 28px rgba(16,42,67,.08);min-width:0}}
+      .qr-photo{{display:block;width:100%;height:230px;object-fit:contain;object-position:center;border-radius:12px;background:#f8fafc}}
       .qr-no-photo{{height:220px;display:flex;align-items:center;justify-content:center;background:#f8fafc;border-radius:12px;color:#98a2b3;font-size:.85rem}}
-      .qr-title{{font-size:1.45rem;font-weight:800;color:#083278;margin:0 0 2px}}
-      .qr-subtitle{{font-size:.76rem;color:#667085;margin:0 0 10px}}
-      .qr-quantity{{background:#083278;color:white;border-radius:12px;padding:11px 16px;margin:8px 0 10px}}
-      .qr-quantity-label{{font-size:.64rem;text-transform:uppercase;letter-spacing:.12em;opacity:.82}}
+      .qr-title{{font-size:1.02rem;font-weight:800;color:#083278;margin:0 0 1px;letter-spacing:.01em}}
+      .qr-subtitle{{font-size:.63rem;color:#667085;margin:0 0 9px;letter-spacing:.02em}}
+      .qr-product-title{{font-size:1.12rem;font-weight:800;color:#083278;margin:0}}
+      .qr-product-code{{font-size:.64rem;color:#98a2b3;margin-top:3px;letter-spacing:.06em}}
+      .qr-quantity{{background:#083278;color:white;border-radius:12px;padding:11px 16px;margin:9px 0 10px}}
+      .qr-quantity-label{{font-size:.62rem;text-transform:uppercase;letter-spacing:.12em;opacity:.82}}
       .qr-quantity-value{{font-size:2rem;font-weight:850;line-height:1.05;margin-top:2px}}
-      .qr-note{{background:#f3f8ff;border:1px solid #d7e7fa;border-radius:10px;padding:10px 13px;margin-top:6px;white-space:pre-wrap;line-height:1.35;font-size:.86rem}}
-      .qr-meta{{font-size:.72rem;color:#667085;line-height:1.5;margin-top:8px}}
-      .qr-tech-title{{font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:#083278;font-weight:800;margin-top:10px}}
-      .qr-tech-grid{{display:grid;grid-template-columns:1fr 1fr;gap:5px 12px;margin-top:4px}}
-      .qr-tech-item{{font-size:.7rem;color:#667085;line-height:1.3}}
-      .qr-tech-item span{{display:block;font-size:.61rem;text-transform:uppercase;letter-spacing:.04em;color:#98a2b3}}
-      .qr-tech-item b{{font-weight:650;color:#344054}}
-      @media(max-width:640px){{.qr-screen{{min-height:calc(100vh - 24px);align-items:flex-start;padding-top:8px}}.qr-card{{grid-template-columns:1fr;gap:10px;padding:14px 16px;border-radius:14px}}.qr-photo,.qr-no-photo{{height:150px}}.qr-title{{font-size:1.2rem}}.qr-quantity{{padding:9px 13px;margin:6px 0 8px}}.qr-quantity-value{{font-size:1.75rem}}.qr-note{{font-size:.8rem;padding:8px 11px}}}}
+      .qr-note{{background:#f3f8ff;border:1px solid #d7e7fa;border-radius:10px;padding:10px 13px;margin-top:6px;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;line-height:1.4;font-size:.82rem;max-height:82px;overflow:auto}}
+      .qr-tech-title{{font-size:.63rem;text-transform:uppercase;letter-spacing:.1em;color:#083278;font-weight:800;margin-top:11px}}
+      .qr-tech-grid{{display:grid;grid-template-columns:1fr;gap:8px;margin-top:6px;min-width:0}}
+      .qr-tech-item{{font-size:.78rem;color:#667085;line-height:1.35;min-width:0;overflow-wrap:anywhere;word-break:break-word;background:#f3f8ff;border:1px solid #d7e7fa;border-radius:10px;padding:9px 11px;max-height:76px;overflow:auto}}
+      .qr-tech-item span{{display:block;font-size:.58rem;text-transform:uppercase;letter-spacing:.04em;color:#7890ac}}
+      .qr-tech-item b{{font-weight:650;color:#344054;display:block;margin-top:4px}}
+      .qr-info{{min-width:0;overflow:hidden}}
+      @media(max-width:640px){{.qr-screen{{height:auto;min-height:calc(100vh - 24px);align-items:flex-start;padding-top:8px;overflow:visible}}.qr-card{{grid-template-columns:1fr;gap:12px;padding:14px 16px;border-radius:14px}}.qr-photo,.qr-no-photo{{height:175px}}.qr-title{{font-size:1.2rem}}.qr-quantity{{padding:9px 13px;margin:6px 0 8px}}.qr-quantity-value{{font-size:1.75rem}}.qr-note{{font-size:.8rem;padding:8px 11px;max-height:110px}}.qr-tech-grid{{grid-template-columns:1fr}}.qr-tech-item{{font-size:.8rem}}}}
     </style>
     <div class="qr-screen"><div class="qr-card">
-      <div>{foto_html}</div><div>
+      <div>{foto_html}</div><div class="qr-info">
       <div class="qr-title">Scheda prodotto</div>
       <div class="qr-subtitle">Consultazione rapida</div>
-      <div class='qr-title' style='font-size:1.1rem'>{nome_qr}</div>
+      <div class='qr-product-title'>{nome_qr}</div>
+      <div class='qr-product-code'>Cod. {codice_qr}</div>
       <div class='qr-quantity'><div class='qr-quantity-label'>Quantità disponibile</div><div class='qr-quantity-value'>{quantita_qr}</div></div>
       <div class='qr-note'><strong>Note</strong><br>{note_qr}</div>
-      <div class='qr-meta'><b>Codice:</b> {codice_qr} · <b>Categoria:</b> {categoria_qr}<br><b>Posizione:</b> {posizione_qr}</div>
       {scheda_tecnica_html}
       </div></div></div>
-    """, unsafe_allow_html=True)
+    """)
+    # In alcune versioni/deployment di Streamlit il parser Markdown può
+    # mostrare l'HTML come testo. Un iframe HTML dedicato evita il problema
+    # e mantiene il layout QR isolato e stabile.
+    components.html(html_scheda_qr, height=620, scrolling=False)
     str_lit.caption("Scheda in sola lettura · Prezzo di noleggio non visualizzato")
     str_lit.stop()
   else:
@@ -2127,21 +2421,36 @@ def modale_crea_evento(data_precompilata=None):
 
     str_lit.markdown("---")
     str_lit.markdown("#### 📝 Note e Allegati per Reparto")
+    str_lit.markdown("""
+    <style>
+    </style>
+    """, unsafe_allow_html=True)
+
+    ruolo_creazione = (str_lit.session_state.get("utente_loggato") or {}).get("ruolo", "")
+    f_privati = []
+    if ruolo_creazione == "Amministratore":
+      str_lit.markdown("<div style='padding:9px 11px;border-radius:8px;background:#e9def7;border:1px solid #c9afe5;font-weight:700;color:#344054;margin:10px 0 4px'>Cartella privata Admin</div>", unsafe_allow_html=True)
+      str_lit.caption("Visibile solo all'Amministratore e scaricabile come unico PDF multipagina.")
+      f_privati = str_lit.file_uploader("Allegati privati dell'evento", accept_multiple_files=True, type=["png", "jpg", "jpeg", "pdf"], key="dialog_crea_privati_f")
 
     def comp_sezione_creazione(titolo_rep, chiave_pref):
-      str_lit.markdown(f"**{titolo_rep}**")
-      t_val = str_lit.text_area(
-          f"Testo note - {titolo_rep}",
-          key=f"dialog_crea_{chiave_pref}_t",
-          label_visibility="collapsed",
-          placeholder=f"Inserisci note per {titolo_rep.lower()}...",
-      )
-      f_val = str_lit.file_uploader(
-          f"Aggiungi allegati ({titolo_rep})",
-          accept_multiple_files=True,
-          type=["png", "jpg", "jpeg", "pdf"],
-          key=f"dialog_crea_{chiave_pref}_f",
-      )
+      colori_rep = {"Note per tutti": ("#dcecff", "#9fc5ee"), "Note per la sala": ("#d9f0df", "#a9d6b3"), "Note per la cucina": ("#ffedc7", "#e5bd78"), "Note per il magazzino": ("#e9def7", "#c9afe5")}
+      sfondo_rep, bordo_rep = colori_rep.get(titolo_rep, ("#f7f8fb", "#e5e9f0"))
+      with str_lit.container(border=True):
+        str_lit.markdown(f"<span class='note-block-marker note-block-{chiave_pref}'></span>", unsafe_allow_html=True)
+        str_lit.markdown(f"<div style='padding:10px 12px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:750;color:#344054;margin-bottom:8px'>{titolo_rep}</div>", unsafe_allow_html=True)
+        t_val = str_lit.text_area(
+            f"Testo note - {titolo_rep}",
+            key=f"dialog_crea_{chiave_pref}_t",
+            label_visibility="visible",
+            placeholder=f"Inserisci note per {titolo_rep.lower()}...",
+        )
+        f_val = str_lit.file_uploader(
+            f"📎 Aggiungi allegati a {titolo_rep} (facoltativo)",
+            accept_multiple_files=True,
+            type=["png", "jpg", "jpeg", "pdf"],
+            key=f"dialog_crea_{chiave_pref}_f",
+        )
       str_lit.markdown("")
       return t_val, f_val
 
@@ -2149,7 +2458,6 @@ def modale_crea_evento(data_precompilata=None):
     t_sala, f_sala = comp_sezione_creazione("Note per la sala", "sala")
     t_cucina, f_cucina = comp_sezione_creazione("Note per la cucina", "cucina")
     t_mag, f_mag = comp_sezione_creazione("Note per il magazzino", "magazzino")
-
     if str_lit.form_submit_button(
         "💾 Salva e Registra Evento", type="primary", use_container_width=True
     ):
@@ -2177,6 +2485,7 @@ def modale_crea_evento(data_precompilata=None):
             "allegati_cucina": process_files(f_cucina),
             "note_magazzino": t_mag,
             "allegati_magazzino": process_files(f_mag),
+            "allegati_privati": process_files(f_privati) if ruolo_creazione == "Amministratore" else [],
         }
         str_lit.session_state.eventi_catering.append(nuovo_ev)
         destinatari_nuovo_evento = ["Sala", "Cucina", "Magazzino"]
@@ -2225,6 +2534,26 @@ def modale_modifica_evento(idx_ev):
     str_lit.stop()
 
   m_data_precompilata = data_da_display_evento(ev_mod)
+
+  # Gli allegati esistenti hanno un'azione esplicita Rimuovi, non una checkbox ambigua.
+  def mostra_allegati_esistenti_evento(titolo, chiave_all):
+    allegati = ev_mod.get(chiave_all) or []
+    if not allegati:
+      return
+    colori_rep = {"Note per tutti": ("#dcecff", "#9fc5ee"), "Note per la sala": ("#d9f0df", "#a9d6b3"), "Note per la cucina": ("#ffedc7", "#e5bd78"), "Note per il magazzino": ("#e9def7", "#c9afe5")}
+    sfondo_rep, bordo_rep = colori_rep.get(titolo, ("#f7f8fb", "#e5e9f0"))
+    str_lit.markdown(f"<div style='padding:8px 10px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:700;color:#344054;margin:8px 0 4px'>{titolo} · allegati presenti</div>", unsafe_allow_html=True)
+    for a_idx, all_item in enumerate(allegati):
+      col_all_1, col_all_2 = str_lit.columns([5, 1])
+      with col_all_1:
+        str_lit.caption(f"📎 {all_item.get('nome_file', 'Allegato')}")
+      with col_all_2:
+        if str_lit.button("Rimuovi", key=f"rimuovi_evento_{idx_ev}_{chiave_all}_{a_idx}"):
+          ev_mod[chiave_all] = [item for pos, item in enumerate(allegati) if pos != a_idx]
+          salva_evento_singolo(ev_mod)
+          str_lit.toast("Allegato rimosso")
+          str_lit.rerun()
+
   with str_lit.form(f"form_mod_ev_dialog_{idx_ev}"):
     m_nome = str_lit.text_input(
         "Nome Evento / Cliente", value=ev_mod.get("nome_evento", "")
@@ -2259,47 +2588,49 @@ def modale_modifica_evento(idx_ev):
 
     str_lit.markdown("---")
     str_lit.markdown("#### 📝 Modifica Note e Gestione Allegati per Reparto")
+    str_lit.markdown("""
+    <style>
+    </style>
+    """, unsafe_allow_html=True)
+    mf_priv_mod = []
+    if (str_lit.session_state.get("utente_loggato") or {}).get("ruolo") == "Amministratore":
+      str_lit.markdown("<div style='padding:8px 10px;border-radius:8px;background:#e9def7;border:1px solid #c9afe5;font-weight:700;color:#344054;margin:8px 0 4px'>Cartella privata Admin</div>", unsafe_allow_html=True)
+      mf_priv_mod = str_lit.file_uploader("Aggiungi allegati alla Cartella privata Admin", accept_multiple_files=True, type=["png", "jpg", "jpeg", "pdf"], key=f"dialog_up_privati_{idx_ev}")
 
     def comp_sezione_modifica(titolo_rep, chiave_testo, chiave_all):
-      str_lit.markdown(f"**{titolo_rep}**")
+      colori_rep = {"Note per tutti": ("#dcecff", "#9fc5ee"), "Note per la sala": ("#d9f0df", "#a9d6b3"), "Note per la cucina": ("#ffedc7", "#e5bd78"), "Note per il magazzino": ("#e9def7", "#c9afe5")}
+      sfondo_rep, bordo_rep = colori_rep.get(titolo_rep, ("#f7f8fb", "#e5e9f0"))
       t_curr = ev_mod.get(chiave_testo, "")
       a_curr = ev_mod.get(chiave_all, [])
-
-      t_mod = str_lit.text_area(
-          f"Testo - {titolo_rep}",
-          value=t_curr,
-          key=f"dialog_t_{chiave_testo}_{idx_ev}",
-          label_visibility="collapsed",
-      )
-
-      if a_curr:
-        str_lit.markdown("📁 *Allegati esistenti (deseleziona per rimuovere):*")
-        for a_idx, all_item in enumerate(a_curr):
-          str_lit.checkbox(
-              f"Mantieni: {all_item['nome_file']}",
-              value=True,
-              key=f"dialog_mantieni_{chiave_testo}_{idx_ev}_{a_idx}",
-          )
-
-      f_aggiunta = str_lit.file_uploader(
-          f"Aggiungi nuovi allegati - {titolo_rep}",
-          accept_multiple_files=True,
-          type=["png", "jpg", "jpeg", "pdf"],
-          key=f"dialog_up_{chiave_testo}_{idx_ev}",
-      )
+      with str_lit.container(border=True):
+        str_lit.markdown(f"<span class='note-block-marker note-block-{chiave_testo.replace('note_', '')}'></span>", unsafe_allow_html=True)
+        str_lit.markdown(f"<div style='padding:10px 12px;border-radius:8px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:750;color:#344054'>{titolo_rep}</div>", unsafe_allow_html=True)
+        t_mod = str_lit.text_area(
+            f"Testo - {titolo_rep}",
+            value=t_curr,
+            key=f"dialog_t_{chiave_testo}_{idx_ev}",
+            label_visibility="visible",
+        )
+        f_aggiunta = str_lit.file_uploader(
+            f"📎 Aggiungi allegati a {titolo_rep} (facoltativo)",
+            accept_multiple_files=True,
+            type=["png", "jpg", "jpeg", "pdf"],
+            key=f"dialog_up_{chiave_testo}_{idx_ev}",
+        )
+      f_priv_mod = []
       str_lit.markdown("")
-      return t_mod, f_aggiunta, a_curr
+      return t_mod, f_aggiunta, a_curr, f_priv_mod
 
-    mt_tutti, mf_tutti, curr_tutti = comp_sezione_modifica(
+    mt_tutti, mf_tutti, curr_tutti, _ = comp_sezione_modifica(
         "Note per tutti", "note_tutti", "allegati_tutti"
     )
-    mt_sala, mf_sala, curr_sala = comp_sezione_modifica(
+    mt_sala, mf_sala, curr_sala, _ = comp_sezione_modifica(
         "Note per la sala", "note_sala", "allegati_sala"
     )
-    mt_cucina, mf_cucina, curr_cucina = comp_sezione_modifica(
+    mt_cucina, mf_cucina, curr_cucina, _ = comp_sezione_modifica(
         "Note per la cucina", "note_cucina", "allegati_cucina"
     )
-    mt_mag, mf_mag, curr_mag = comp_sezione_modifica(
+    mt_mag, mf_mag, curr_mag, _ = comp_sezione_modifica(
         "Note per il magazzino", "note_magazzino", "allegati_magazzino"
     )
 
@@ -2316,13 +2647,8 @@ def modale_modifica_evento(idx_ev):
     if btn_salva_ev:
 
       def filtra_e_unisci_allegati(existing_list, nuovi_files, chiave_testo):
-        risultati = []
-        if existing_list:
-          for a_idx, item in enumerate(existing_list):
-            if str_lit.session_state.get(
-                f"dialog_mantieni_{chiave_testo}_{idx_ev}_{a_idx}", True
-            ):
-              risultati.append(item)
+        # Gli allegati esistenti sono già stati filtrati con il pulsante Rimuovi.
+        risultati = list(existing_list or [])
         if nuovi_files:
           for f in nuovi_files:
             risultati.append({
@@ -2357,6 +2683,9 @@ def modale_modifica_evento(idx_ev):
           "allegati_magazzino": filtra_e_unisci_allegati(
               curr_mag, mf_mag, "note_magazzino"
           ),
+          "allegati_privati": filtra_e_unisci_allegati(
+              ev_mod.get("allegati_privati") or [], mf_priv_mod, "allegati_privati"
+          ),
       })
       if mt_tutti.strip():
         str_lit.session_state.notifiche_demo.append({"tipo": "nota", "destinatari": ["Sala", "Cucina", "Magazzino"], "testo": f"Nuova nota per tutti nell’evento {m_nome}."})
@@ -2374,6 +2703,16 @@ def modale_modifica_evento(idx_ev):
       # Il submit del form provoca già il rerun: non forziamo un secondo
       # rerun, altrimenti la finestra di dialogo si chiude prima della conferma.
       str_lit.session_state[f"eliminazione_evento_in_attesa_{idx_ev}"] = True
+
+  # Gli allegati già presenti vengono mostrati alla fine della pagina, dopo
+  # i dati dell'evento e i quattro blocchi di note.
+  str_lit.markdown("#### 📎 Allegati già caricati · Rimuovi se necessario")
+  if (str_lit.session_state.get("utente_loggato") or {}).get("ruolo") == "Amministratore":
+    mostra_allegati_esistenti_evento("Cartella privata Admin", "allegati_privati")
+  mostra_allegati_esistenti_evento("Note per tutti", "allegati_tutti")
+  mostra_allegati_esistenti_evento("Note per la sala", "allegati_sala")
+  mostra_allegati_esistenti_evento("Note per la cucina", "allegati_cucina")
+  mostra_allegati_esistenti_evento("Note per il magazzino", "allegati_magazzino")
 
 
 if str_lit.session_state.utente_loggato is None:
@@ -2418,7 +2757,7 @@ if str_lit.session_state.utente_loggato is None:
         trovato = None
         for usr, dati in str_lit.session_state.utenti_autorizzati.items():
           if usr == username_inserito or dati.get("email") == username_inserito:
-            if dati["password"] == password_inserita:
+            if verifica_password(password_inserita, dati.get("password", "")):
               trovato = dati.copy()
               trovato["username_chiave"] = usr
         if trovato:
@@ -2909,19 +3248,19 @@ else:
               str_lit.markdown("---")
 
               def mostra_sezione_note(titolo, testo, allegati, funzione_colore, prefisso):
-                str_lit.markdown(f"**{titolo}:**")
-                getattr(str_lit, funzione_colore)(testo or "Nessuna nota.")
+                colori_rep = {"Note per tutti": ("#dcecff", "#9fc5ee"), "Note per la sala": ("#d9f0df", "#a9d6b3"), "Note per la cucina": ("#ffedc7", "#e5bd78"), "Note per il magazzino": ("#e9def7", "#c9afe5")}
+                sfondo_rep, bordo_rep = colori_rep.get(titolo, ("#f7f8fb", "#e5e9f0"))
+                str_lit.markdown("<div style='height:22px'></div>", unsafe_allow_html=True)
+                str_lit.markdown(f"<div style='padding:10px 12px;border-radius:9px;background:{sfondo_rep};border:1px solid {bordo_rep};font-weight:750;color:#344054;margin:0 0 7px'>{titolo}</div>", unsafe_allow_html=True)
+                testo_sicuro = html.escape(str(testo or "Nessuna nota.")).replace("\n", "<br>")
+                str_lit.markdown(f"<div style='padding:12px 13px;border-radius:8px;background:#ffffff;border:1px solid #d0d5dd;color:#344054;min-height:42px'>{testo_sicuro}</div>", unsafe_allow_html=True)
                 if allegati:
-                  str_lit.markdown(f"📎 **Allegati {titolo.replace('Note per ', '')}:**")
+                  str_lit.markdown(f"<div style='padding:8px 10px;margin-top:7px;background:#ffffff;border:1px solid #d0d5dd;border-radius:8px;color:#344054'>📎 <b>Allegati {titolo.replace('Note per ', '')}:</b></div>", unsafe_allow_html=True)
                   for att in allegati:
-                    str_lit.download_button(
-                        f"📥 Scarica allegato: {att['nome_file']}",
-                        data=dati_allegato_evento(att),
-                        file_name=att["nome_file"],
-                        mime=att.get("mime", "application/octet-stream"),
-                        key=f"dl_{prefisso}_{idx_ev}_{att['nome_file']}",
-                    )
+                    mostra_preview_allegato_evento(att, f"{prefisso}_{idx_ev}")
 
+              if is_admin:
+                mostra_cartella_privata_evento(ev)
               mostra_sezione_note(
                   "Note per tutti", ev.get("note_tutti"),
                   ev.get("allegati_tutti") or [], "info", "tutti"
@@ -2941,39 +3280,11 @@ else:
                     ev.get("allegati_magazzino") or [], "error", "mag_all"
                 )
               elif is_cucina:
-                str_lit.markdown("**Note per la cucina:**")
-                str_lit.success(ev.get("note_cucina") or "Nessuna nota.")
-                if ev.get("allegati_cucina"):
-                  for att in ev.get("allegati_cucina"):
-                    str_lit.download_button(
-                        f"📥 Scarica allegato: {att['nome_file']}",
-                        data=dati_allegato_evento(att),
-                        file_name=att["nome_file"],
-                        key=f"dl_cucina_c_{idx_ev}_{att['nome_file']}",
-                    )
+                mostra_sezione_note("Note per la cucina", ev.get("note_cucina"), ev.get("allegati_cucina") or [], "success", f"cucina_c_{idx_ev}")
               elif is_sala:
-                str_lit.markdown("**Note per la sala:**")
-                str_lit.success(ev.get("note_sala") or "Nessuna nota.")
-                if ev.get("allegati_sala"):
-                  for att in ev.get("allegati_sala"):
-                    str_lit.download_button(
-                        f"📥 Scarica allegato: {att['nome_file']}",
-                        data=dati_allegato_evento(att),
-                        file_name=att["nome_file"],
-                        key=f"dl_sala_s_{idx_ev}_{att['nome_file']}",
-                    )
+                mostra_sezione_note("Note per la sala", ev.get("note_sala"), ev.get("allegati_sala") or [], "success", f"sala_s_{idx_ev}")
               elif is_magazzino or is_magazzino2:
-                str_lit.markdown("**Note per il magazzino:**")
-                str_lit.success(ev.get("note_magazzino") or "Nessuna nota.")
-                if ev.get("allegati_magazzino"):
-                  for att in ev.get("allegati_magazzino"):
-                    str_lit.download_button(
-                        f"📥 Scarica allegato: {att['nome_file']}",
-                        data=dati_allegato_evento(att),
-                        file_name=att["nome_file"],
-                        mime=att.get("mime", "application/octet-stream"),
-                        key=f"dl_mag_{idx_ev}_{att['nome_file']}",
-                    )
+                mostra_sezione_note("Note per il magazzino", ev.get("note_magazzino"), ev.get("allegati_magazzino") or [], "success", f"mag_{idx_ev}")
 
     elif str_lit.session_state.area_selezionata == "opzione_3":
       if is_admin:
@@ -3008,7 +3319,7 @@ else:
               str_lit.error("Questo username esiste già. Scegline un altro.")
             else:
               str_lit.session_state.utenti_autorizzati[ins_user_key.strip()] = {
-                  "password": ins_pass.strip(),
+                  "password": hash_password(ins_pass.strip()),
                   "ruolo": ins_ruolo,
                   "nome": ins_nome.strip() or ins_user_key.strip(),
                   "email": ins_email.strip(),
@@ -3032,7 +3343,7 @@ else:
                   f" `{usr_v.get('ruolo', '-')}` | ✉️ **Email:**"
                   f" {usr_v.get('email', '-')}"
               )
-              str_lit.markdown(f"🔑 **Password:** `{usr_v.get('password', '-')}`")
+              str_lit.caption("Password protetta e non visualizzabile")
             with col_del_u:
               if usr_k != "admin":
                 if str_lit.button(
